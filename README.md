@@ -87,6 +87,8 @@ and `pay` on this contract.
 
 ## Statement page and CSV
 
+Live: **https://mohamed-aaftaab.github.io/MergePay/?period=2026-11**
+
 `docs/index.html` is a static page. It lists the contract's activity from the NearBlocks API, reads
 each transaction's events from NEAR RPC, and looks up repository and user names on GitHub. No server
 and no wallet are involved.
