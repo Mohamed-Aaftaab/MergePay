@@ -48,7 +48,7 @@ Until the contract has had an independent review, fund pools with small amounts 
 | Contract: pools, awards, on-chain RS256 check, account links, payouts, refunds, key time-lock | Deployed on testnet, 21 unit tests pass |
 | Award and link workflows (`.github/workflows/`) | Running in this repository |
 | Real merged PR paid on testnet, verified with GitHub's own signature | Done (see below). Not yet run on mainnet or with USDC |
-| CSV export and statement page | Not built |
+| Statement page and CSV export (`docs/`) | Built, reads the testnet contract live. The Fund button shows the funding command; 1Click is not wired in |
 | Gasless delegate actions (NEP-366) for fund, refund, withdraw | Not built. Awards and links need no user signature: the workflow submits them with a key that can only call this contract |
 | 1Click funding and cross-chain withdrawal | Not built |
 
@@ -85,10 +85,41 @@ The rate card is written in micro-USDC, so on the 24-decimal stand-in token the 
 (5000000 base units). The submitting key is a function-call key that can only call `award`, `link`
 and `pay` on this contract.
 
+## Statement page and CSV
+
+`docs/index.html` is a static page. It lists the contract's activity from the NearBlocks API, reads
+each transaction's events from NEAR RPC, and looks up repository and user names on GitHub. No server
+and no wallet are involved.
+
+- Pick a month to see that period's line items, the total paid and the due date (7 days after the
+  period ends).
+- **Download CSV** saves one row per payment: each funding, each award (Pending, then Paid or
+  Refunded) and each refund. The columns are `date_utc, repo, pr_number, pr_url, contributor_github,
+  contributor_near_account, label, rate_usd, amount_usdc, status, award_tx, payout_tx, refund_tx,
+  explorer_url, withdrawal_chain, withdrawal_status`.
+- Amounts have 6 decimals and no currency sign. Dates are ISO 8601 in UTC. Cells that start with
+  `=`, `+`, `-` or `@` get a leading `'` so they cannot run as formulas. The file is UTF-8 with a BOM
+  so Excel opens it without garbling.
+- On funding and refund rows, `contributor_near_account` holds the funder's account and `label` says
+  `funding` or `refund`.
+- `?contract=<account>` points the page at another deployment and `?pools=1,2` limits it to some
+  pools. The demo contract defaults to pool 1: pool 0 was a smoke test whose made-up GitHub ids belong
+  to unrelated people.
+
+To run it locally, serve the folder (ES modules do not load from `file://`):
+
+```bash
+python -m http.server 8765 --directory docs
+```
+
 ## For developers
 
 ```bash
 cargo test
+```
+
+```bash
+node --test test/ledger.test.mjs
 ```
 
 ```bash

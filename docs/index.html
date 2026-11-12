@@ -1,0 +1,334 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>MergePay Statement</title>
+<meta name="description" content="Payroll statement for MergePay on NEAR: every funding, award, payout and refund, read from the chain.">
+<style>
+  :root {
+    --bg: #f7f7f5; --surface: #ffffff; --text: #1d1d1b; --muted: #66665f; --line: #e3e3de;
+    --accent: #1f6f4a; --accent-ink: #ffffff; --paid: #1f6f4a; --pending: #8a5a00; --funded: #2b5ea7; --refunded: #6b4fa0;
+    --paid-bg: #e4f2ea; --pending-bg: #fbf0d9; --funded-bg: #e3ecf8; --refunded-bg: #eee8f7; --error: #a3261d;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #141413; --surface: #1d1d1b; --text: #ededea; --muted: #a3a39b; --line: #33332f;
+      --accent: #5cc08d; --accent-ink: #0d1f15; --paid: #6fd19d; --pending: #f0c060; --funded: #84aef0; --refunded: #b9a1e6;
+      --paid-bg: #183026; --pending-bg: #352a12; --funded-bg: #1a2638; --refunded-bg: #29213a; --error: #f08a80;
+    }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text); font: 15px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif; }
+  main { max-width: 1100px; margin: 0 auto; padding: 32px 16px 64px; }
+  header { display: flex; flex-wrap: wrap; gap: 16px; align-items: flex-end; justify-content: space-between; margin-bottom: 24px; }
+  h1 { font-size: 26px; margin: 0 0 4px; letter-spacing: -0.01em; }
+  .sub { color: var(--muted); margin: 0; overflow-wrap: anywhere; }
+  .sub a { color: inherit; }
+  .controls { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+  label.period { display: flex; gap: 8px; align-items: center; color: var(--muted); }
+  input[type="month"] { font: inherit; padding: 7px 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); color: var(--text); }
+  button { font: inherit; font-weight: 600; padding: 8px 14px; border-radius: 8px; border: 1px solid var(--line); background: var(--surface); color: var(--text); cursor: pointer; }
+  button.primary { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
+  button:disabled { opacity: 0.5; cursor: default; }
+  button:focus-visible, input:focus-visible, a:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  .tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 12px; margin-bottom: 24px; }
+  .tile { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 14px 16px; }
+  .tile .k { color: var(--muted); font-size: 13px; }
+  .tile .v { font-size: 22px; font-weight: 650; font-variant-numeric: tabular-nums; margin-top: 2px; overflow-wrap: anywhere; }
+  .tile .v small { font-size: 13px; font-weight: 500; color: var(--muted); }
+  .card { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; overflow: hidden; }
+  .card-head { display: flex; flex-wrap: wrap; gap: 8px; justify-content: space-between; align-items: center; padding: 14px 16px; border-bottom: 1px solid var(--line); }
+  .card-head h2 { font-size: 16px; margin: 0; }
+  .scroll { overflow-x: auto; }
+  table { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; }
+  th, td { text-align: left; padding: 10px 16px; border-bottom: 1px solid var(--line); white-space: nowrap; }
+  th { font-size: 12px; text-transform: uppercase; letter-spacing: 0.04em; color: var(--muted); font-weight: 600; }
+  td.num, th.num { text-align: right; }
+  tbody tr:last-child td { border-bottom: 0; }
+  tfoot td { font-weight: 650; border-top: 1px solid var(--line); border-bottom: 0; }
+  td a { color: var(--text); }
+  .badge { display: inline-block; padding: 2px 10px; border-radius: 999px; font-size: 12px; font-weight: 650; }
+  .Paid { color: var(--paid); background: var(--paid-bg); }
+  .Pending { color: var(--pending); background: var(--pending-bg); }
+  .Funded { color: var(--funded); background: var(--funded-bg); }
+  .Refunded { color: var(--refunded); background: var(--refunded-bg); }
+  .empty, .status { padding: 28px 16px; color: var(--muted); text-align: center; }
+  .status.error { color: var(--error); }
+  .note { color: var(--muted); font-size: 13px; margin-top: 16px; }
+  dialog { border: 1px solid var(--line); border-radius: 12px; background: var(--surface); color: var(--text); max-width: 640px; width: calc(100% - 32px); padding: 20px; }
+  dialog::backdrop { background: rgb(0 0 0 / 0.4); }
+  dialog h2 { margin-top: 0; font-size: 18px; }
+  pre { background: var(--bg); border: 1px solid var(--line); border-radius: 8px; padding: 12px; overflow-x: auto; font-size: 13px; white-space: pre-wrap; word-break: break-all; }
+  .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+</style>
+</head>
+<body>
+<main>
+  <header>
+    <div>
+      <h1>Payroll statement</h1>
+      <p class="sub">Contract <a id="contract-link" href="#"></a> on NEAR <span id="network"></span><span id="pool-note"></span>. Every line is read from the chain.</p>
+    </div>
+    <div class="controls">
+      <label class="period">Period <input type="month" id="period" required></label>
+      <button class="primary" id="fund" type="button">Fund</button>
+    </div>
+  </header>
+
+  <section class="tiles" aria-label="Totals for the period">
+    <div class="tile"><div class="k">Paid this period</div><div class="v" id="t-paid">–</div></div>
+    <div class="tile"><div class="k">Awaiting payout (all time)</div><div class="v" id="t-pending">–</div></div>
+    <div class="tile"><div class="k">Unspent in pools</div><div class="v" id="t-pools">–</div></div>
+    <div class="tile"><div class="k">Due date</div><div class="v" id="t-due">–</div></div>
+  </section>
+
+  <section class="card" aria-labelledby="lines-title">
+    <div class="card-head">
+      <h2 id="lines-title">Line items</h2>
+      <div class="controls">
+        <button id="csv-period" type="button" disabled>Download CSV (period)</button>
+        <button id="csv-all" type="button" disabled>Download CSV (all)</button>
+      </div>
+    </div>
+    <div id="status" class="status" role="status" aria-live="polite">Loading…</div>
+    <div class="scroll"><table id="table" hidden>
+      <thead><tr>
+        <th>Date (UTC)</th><th>Pull request</th><th>Contributor</th><th>Label</th>
+        <th class="num">Rate (USD)</th><th class="num">Amount (USDC)</th><th>Status</th><th>Transaction</th>
+      </tr></thead>
+      <tbody id="rows"></tbody>
+      <tfoot><tr><td colspan="5">Total paid in period</td><td class="num" id="foot-total"></td><td colspan="2"></td></tr></tfoot>
+    </table></div>
+  </section>
+
+  <p class="note">Amounts are in USDC base units shown with 6 decimals. The testnet pilot uses wrapped NEAR as a stand-in token,
+    so its amounts are the same base units, not real dollars. Due date is 7 days after the period ends.</p>
+</main>
+
+<dialog id="fund-dialog" aria-labelledby="fund-title">
+  <h2 id="fund-title">Fund a pool</h2>
+  <p>Send USDC to the contract with the pool id as the message. Paying from another chain or token through 1Click is not built yet.</p>
+  <pre id="fund-cmd"></pre>
+  <p class="note">To open a new pool for another repository, put the pool terms JSON in <code>msg</code> instead of the pool id. See the README.</p>
+  <form method="dialog"><button type="submit">Close</button></form>
+</dialog>
+
+<script type="module">
+import { buildRows, eventsFromOutcomes, formatAmount, statement, toCsv } from './ledger.mjs';
+
+const params = new URLSearchParams(location.search);
+const contract = params.get('contract') || 'pay.mergepay-482529.testnet';
+const network = contract.endsWith('.testnet') ? 'testnet' : 'mainnet';
+const API = network === 'testnet' ? 'https://api-testnet.nearblocks.io/v3' : 'https://api.nearblocks.io/v3';
+const RPC = network === 'testnet' ? 'https://rpc.testnet.near.org' : 'https://rpc.mainnet.near.org';
+const EXPLORER = network === 'testnet' ? 'https://testnet.nearblocks.io/txns/' : 'https://nearblocks.io/txns/';
+const USDC = network === 'testnet' ? 'wrap.testnet' : '17208628f84f5d6ad33f0da3bbbeb27ffcb398eac501a31bd6ad2011e36133a1';
+const FINAL_AFTER_MS = 10 * 60 * 1000; // a transaction this old is final and fully indexed, so it is safe to cache
+const DEMO = 'pay.mergepay-482529.testnet';
+// Pool 0 on the demo contract was a smoke test with made-up GitHub ids that belong to unrelated real people.
+const poolFilter = (params.get('pools') ?? (contract === DEMO ? '1' : '')).split(',').filter(Boolean).map(Number);
+const inPools = (e) => poolFilter.length === 0 || !('pool_id' in e.data) || poolFilter.includes(e.data.pool_id);
+
+const $ = (id) => document.getElementById(id);
+const cache = {
+  get(k) { try { return JSON.parse(localStorage.getItem(k)); } catch { return null; } },
+  set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch { /* storage full or blocked: just refetch next time */ } },
+};
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+const say = (text, isError = false) => { $('status').hidden = false; $('status').textContent = text; $('status').classList.toggle('error', isError); };
+
+async function getJson(url, tries = 6) {
+  for (let i = 0; i < tries; i++) {
+    const res = await fetch(url);
+    if (res.status === 429) { say(`The block explorer is rate limiting us, waiting… (${i + 1}/${tries})`); await sleep(12000); continue; }
+    if (!res.ok) throw new Error(`${url} returned ${res.status}`);
+    return res.json();
+  }
+  throw new Error('The block explorer kept rate limiting. Try again in a minute.');
+}
+
+// The explorer only lists which transactions touched the contract (one call per 100 receipts, it rate limits hard);
+// the logs come from NEAR RPC, which finds a transaction by hash alone.
+async function receiptIndex() {
+  const txs = new Map(); // hash -> earliest block timestamp
+  const times = {}; // receipt id -> block timestamp
+  let next = '';
+  do {
+    say('Listing contract activity…');
+    const page = await getJson(`${API}/accounts/${contract}/receipts?limit=100${next ? `&next=${encodeURIComponent(next)}` : ''}`);
+    for (const r of page.data ?? []) {
+      const ts = r.block?.block_timestamp ?? r.included_in_block_timestamp;
+      times[r.receipt_id] = ts;
+      if (!txs.has(r.transaction_hash) || BigInt(ts) < BigInt(txs.get(r.transaction_hash))) txs.set(r.transaction_hash, ts);
+    }
+    next = page.meta?.next_page ?? '';
+  } while (next);
+  return { txs, times };
+}
+
+async function rpc(method, params) {
+  const res = await fetch(RPC, { method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ jsonrpc: '2.0', id: 1, method, params }) }).then((r) => r.json());
+  if (res.error) throw new Error(`RPC ${method}: ${res.error.cause?.name ?? res.error.message}`);
+  return res.result;
+}
+
+async function loadEvents() {
+  const { txs, times } = await receiptIndex();
+  const events = [];
+  let done = 0;
+  // a few at a time keeps public RPC happy
+  const work = [...txs];
+  const worker = async () => {
+    for (let item = work.shift(); item; item = work.shift()) {
+      const [hash, ts] = item;
+      const key = `mergepay:${network}:tx:${hash}`;
+      let found = cache.get(key);
+      if (!found) {
+        const tx = await rpc('tx', { tx_hash: hash, sender_account_id: contract, wait_until: 'FINAL' });
+        found = eventsFromOutcomes(tx.receipts_outcome, contract, hash, times, ts);
+        if (Date.now() - Number(BigInt(ts) / 1_000_000n) > FINAL_AFTER_MS) cache.set(key, found);
+      }
+      events.push(...found);
+      say(`Reading transactions… ${++done} of ${txs.size}`);
+    }
+  };
+  await Promise.all([worker(), worker(), worker(), worker()]);
+  return events;
+}
+
+async function github(path) {
+  const key = `mergepay:gh:${path}`;
+  const hit = cache.get(key);
+  if (hit) return hit;
+  const res = await fetch(`https://api.github.com${path}`);
+  if (!res.ok) return null; // unauthenticated limit is 60 an hour; names just fall back to ids
+  const body = await res.json();
+  cache.set(key, body);
+  return body;
+}
+
+async function githubNames(events) {
+  const names = { repos: {}, users: {}, labels: {} };
+  const poolRepo = {};
+  for (const e of events) if (e.event === 'funded' && e.data.terms) poolRepo[e.data.pool_id] = String(e.data.terms.repo_id);
+  for (const id of new Set(Object.values(poolRepo))) {
+    const repo = await github(`/repositories/${id}`);
+    if (repo) names.repos[id] = repo.full_name;
+  }
+  for (const e of events.filter((x) => x.event === 'award')) {
+    const { pool_id, pr, github_id } = e.data;
+    if (!(github_id in names.users)) {
+      const user = await github(`/user/${github_id}`);
+      if (user) names.users[github_id] = user.login;
+    }
+    const repo = names.repos[poolRepo[pool_id]];
+    if (repo) {
+      const issue = await github(`/repos/${repo}/issues/${pr}`);
+      const label = issue?.labels?.map((l) => l.name).find((n) => n.startsWith('pay:'));
+      if (label) names.labels[`${pool_id}:${pr}`] = label;
+    }
+  }
+  return names;
+}
+
+async function unspentInPools(events) {
+  const ids = [...new Set(events.filter((e) => e.event === 'funded').map((e) => e.data.pool_id))];
+  let total = 0n;
+  for (const pool_id of ids) {
+    const res = await rpc('query', { request_type: 'call_function', finality: 'final', account_id: contract,
+      method_name: 'get_pool', args_base64: btoa(JSON.stringify({ pool_id })) });
+    const pool = JSON.parse(new TextDecoder().decode(new Uint8Array(res.result)));
+    if (pool) total += BigInt(pool.balance);
+  }
+  return total;
+}
+
+function cellLink(href, text) {
+  const td = document.createElement('td');
+  if (href) { const a = document.createElement('a'); a.href = href; a.textContent = text; a.rel = 'noopener'; a.target = '_blank'; td.append(a); }
+  else td.textContent = text;
+  return td;
+}
+function cell(text, cls) { const td = document.createElement('td'); td.textContent = text; if (cls) td.className = cls; return td; }
+
+function download(name, rows) {
+  const blob = new Blob(['﻿', toCsv(rows)], { type: 'text/csv;charset=utf-8' }); // BOM so Excel reads UTF-8
+  const a = Object.assign(document.createElement('a'), { href: URL.createObjectURL(blob), download: name });
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+}
+
+function render(rows, period) {
+  const { lines, totalPaid } = statement(rows, period);
+  const pending = rows.filter((r) => r.status === 'Pending').reduce((s, r) => s + BigInt(r.amount_usdc.replace('.', '')), 0n);
+  $('t-paid').textContent = totalPaid;
+  $('t-pending').textContent = formatAmount(pending);
+  $('foot-total').textContent = totalPaid;
+  const [y, m] = period.split('-').map(Number);
+  $('t-due').textContent = new Date(Date.UTC(y, m, 7)).toISOString().slice(0, 10);
+
+  const body = $('rows');
+  body.replaceChildren();
+  for (const r of [...lines].reverse()) {
+    const tr = document.createElement('tr');
+    const status = document.createElement('td');
+    status.append(Object.assign(document.createElement('span'), { className: `badge ${r.status}`, textContent: r.status }));
+    const lastTx = r.explorer_url.split('/').pop();
+    tr.append(
+      cell(r.date_utc.replace('T', ' ').replace('Z', '')),
+      cellLink(r.pr_url, r.pr_number ? `${r.repo} #${r.pr_number}` : r.repo || '–'),
+      cellLink(r.contributor_github ? `https://github.com/${r.contributor_github}` : '', r.contributor_github || r.contributor_near_account || '–'),
+      cell(r.label || '–'),
+      cell(r.rate_usd || '–', 'num'),
+      cell(r.amount_usdc, 'num'),
+      status,
+      cellLink(r.explorer_url, `${lastTx.slice(0, 8)}…`),
+    );
+    body.append(tr);
+  }
+  $('table').hidden = lines.length === 0;
+  if (lines.length === 0) say('No payments in this period.'); else $('status').hidden = true;
+  $('csv-period').onclick = () => download(`mergepay-${period}.csv`, lines);
+  $('csv-all').onclick = () => download('mergepay-all.csv', rows);
+  $('csv-period').disabled = $('csv-all').disabled = false;
+}
+
+$('contract-link').textContent = contract;
+$('contract-link').href = `${EXPLORER.replace('/txns/', '/address/')}${contract}`;
+$('network').textContent = network;
+if (poolFilter.length) $('pool-note').textContent = `, pool ${poolFilter.join(', ')}`;
+$('period').value = params.get('period') || new Date().toISOString().slice(0, 7);
+
+let rows = [];
+let pools = [];
+$('period').addEventListener('change', () => {
+  if (!/^\d{4}-\d{2}$/.test($('period').value)) return;
+  const url = new URL(location.href);
+  url.searchParams.set('period', $('period').value);
+  history.replaceState(null, '', url);
+  render(rows, $('period').value);
+});
+$('fund').addEventListener('click', () => {
+  const pool = pools.at(-1) ?? 0;
+  $('fund-cmd').textContent = `near contract call-function as-transaction ${USDC} ft_transfer_call \\
+  json-args '{"receiver_id":"${contract}","amount":"<base units>","msg":"${pool}"}' \\
+  prepaid-gas '100 Tgas' attached-deposit '1 yoctoNEAR' \\
+  sign-as <your account> network-config ${network} sign-with-keychain send`;
+  $('fund-dialog').showModal();
+});
+
+try {
+  const events = (await loadEvents()).filter(inPools);
+  pools = [...new Set(events.filter((e) => e.event === 'funded').map((e) => e.data.pool_id))].sort((a, b) => a - b);
+  say('Looking up GitHub names…');
+  rows = buildRows(events, { explorer: EXPLORER, names: await githubNames(events) });
+  render(rows, $('period').value);
+  $('t-pools').textContent = formatAmount(await unspentInPools(events));
+} catch (err) {
+  say(`Could not load the statement: ${err.message}`, true);
+}
+</script>
+</body>
+</html>
