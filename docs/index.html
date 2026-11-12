@@ -76,8 +76,8 @@
     <img src="https://d2ol7oe51mr4n9.cloudfront.net/user_38xzZboKViGWJOttwIXH07lWA1P/f1631235-0a76-464d-8f1d-2c4b48a997d5.jpg" alt="" width="1672" height="941" fetchpriority="high">
     <video id="globe-video" muted loop playsinline preload="auto"></video>
     <!-- tags hang off the light-line nodes in the artwork (plate percentages) and quote the real testnet run -->
-    <span class="tag glass rise d6" style="left:12.7%;top:43.9%"><i></i>PR #1 merged with pay:small</span>
-    <span class="tag tag-r glass rise d7" style="left:92%;top:45%"><i></i>Signature checked on-chain, 20 TGas</span>
+    <span class="tag glass rise d6" id="tag-pr" style="left:12.7%;top:43.9%" hidden><i></i><span></span></span>
+    <span class="tag tag-r glass rise d7" id="tag-gas" style="left:92%;top:45%" hidden><i></i><span></span></span>
   </div>
 
   <nav class="nav rise" aria-label="Main">
@@ -86,18 +86,18 @@
       <li><a href="./" aria-current="page">Home</a></li>
       <li><a href="statement.html">Statement</a></li>
       <li><a href="#how">How it works</a></li>
-      <li><a href="https://github.com/Mohamed-Aaftaab/MergePay#for-the-bookkeeper">Bookkeeper guide</a></li>
-      <li><a href="https://testnet.nearblocks.io/address/pay.mergepay-482529.testnet">Contract</a></li>
+      <li><a data-repo-link="#for-the-bookkeeper" href="#">Bookkeeper guide</a></li>
+      <li><a data-contract-link href="#">Contract</a></li>
     </ul>
     <div class="nav-end">
-      <span class="chip-net"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c2.8 3 2.8 15 0 18M12 3c-2.8 3-2.8 15 0 18"/></svg>NEAR testnet</span>
+      <span class="chip-net"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c2.8 3 2.8 15 0 18M12 3c-2.8 3-2.8 15 0 18"/></svg>NEAR&nbsp;<span data-network></span></span>
       <a class="pill pill-white" href="statement.html">Open statement</a>
-      <a class="pill pill-outline" href="https://github.com/Mohamed-Aaftaab/MergePay">View code</a>
+      <a class="pill pill-outline" data-repo-link="" href="#">View code</a>
     </div>
   </nav>
 
   <div class="center">
-    <span class="badge glass rise d1"><b class="live" aria-hidden="true"></b> On NEAR testnet. First pull request paid 12 Nov 2026.</span>
+    <span class="badge glass rise d1"><b class="live" aria-hidden="true"></b> <span id="badge-text">On NEAR <span data-network></span></span></span>
     <h1 class="display">
       <span class="line rise d2">Pay for merged pull requests,</span>
       <span class="line rise d3">not invoices</span>
@@ -114,14 +114,14 @@
   <h2 id="how-title">How it works</h2>
   <ol class="steps">
     <li class="glass"><h3>Fund a pool</h3><p>Send USDC to the contract for one repository. You set the most a single pull request can earn and the date the pool closes. Whatever is left after that date goes back to you.</p>
-      <a href="https://testnet.nearblocks.io/txns/ERE53i77N9xxnMEUoBXT7JMfT8DqbgsdCdKgFdDhdkvT">Testnet funding transaction</a></li>
+      <a id="proof-fund" href="#" hidden>Latest funding transaction</a></li>
     <li class="glass"><h3>Merge with a pay label</h3><p>A workflow in your repository reads the label, asks GitHub for a signed token that names the pull request, its author and the amount, and sends it to the contract.</p>
-      <a href="https://github.com/Mohamed-Aaftaab/MergePay/actions/runs/43211106314">Workflow run for PR #1</a></li>
+      <a id="proof-run" href="#" hidden>Latest award workflow run</a></li>
     <li class="glass"><h3>The author is paid</h3><p>The contract checks GitHub's signature and pays the NEAR account the author linked. If they haven't linked one yet, the award waits for them.</p>
-      <a href="https://testnet.nearblocks.io/txns/fLg1irrCa4L5zJ93bJ9DYWuoxwfjMnSVtQCdGhUNGWz">Payout transaction</a></li>
+      <a id="proof-paid" href="#" hidden>Latest payout transaction</a></li>
   </ol>
 </section>
-<footer>MergePay on NEAR · built for NEAR HACKATHON 2026 · testnet pilot, not audited</footer>
+<footer>MergePay on NEAR · built for NEAR HACKATHON 2026 · <span data-network></span> pilot, not audited</footer>
 
 <script>
   // The globe spins only through the video; reduced motion keeps the still.
@@ -130,6 +130,53 @@
     video.addEventListener('playing', () => video.classList.add('ready'), { once: true });
     video.src = 'https://d2ol7oe51mr4n9.cloudfront.net/user_38xzZboKViGWJOttwIXH07lWA1P/e71aea27-a808-4ae3-8231-a469d49285d4.mp4';
     video.play().catch(() => { /* autoplay blocked: the still stays */ });
+  }
+</script>
+<script type="module">
+  // Everything this page states about the pilot is read from the contract on load; nothing is typed in.
+  import { SITE, settings } from './config.mjs';
+  import { reader } from './chain.mjs';
+  const cfg = settings();
+  for (const a of document.querySelectorAll('[data-contract-link]')) a.href = cfg.accountUrl(cfg.contract);
+  for (const a of document.querySelectorAll('[data-repo-link]')) a.href = `https://github.com/${SITE.repo}${a.dataset.repoLink}`;
+  for (const el of document.querySelectorAll('[data-network]')) el.textContent = cfg.network;
+
+  const show = (id, text, href) => {
+    const el = document.getElementById(id);
+    if (text) (el.querySelector('span') ?? el).textContent = text;
+    if (href) el.href = href;
+    el.hidden = false;
+  };
+  const byTime = (a, b) => (BigInt(a.ts) < BigInt(b.ts) ? -1 : 1);
+
+  try {
+    const chain = reader(cfg);
+    const { events, gas } = await chain.events();
+    const paid = events.filter((e) => e.event === 'paid').sort(byTime);
+    const funded = events.filter((e) => e.event === 'funded').sort(byTime);
+    if (funded.length) show('proof-fund', null, cfg.txUrl(funded.at(-1).tx));
+    if (paid.length) {
+      const first = new Date(Number(BigInt(paid[0].ts) / 1_000_000n));
+      const day = first.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'UTC' });
+      document.getElementById('badge-text').textContent = `On NEAR ${cfg.network}. First pull request paid ${day}.`;
+      const last = paid.at(-1);
+      show('proof-paid', null, cfg.txUrl(last.tx));
+      const award = events.find((e) => e.event === 'award' && e.data.pool_id === last.data.pool_id && e.data.pr === last.data.pr);
+      const names = await chain.names(events);
+      const label = names.labels[`${last.data.pool_id}:${last.data.pr}`];
+      show('tag-pr', `PR #${last.data.pr} merged${label ? ` with ${label}` : ''}`);
+      if (award && gas[award.tx]) show('tag-gas', `Signature checked on-chain, ${(gas[award.tx] / 1e12).toFixed(1)} TGas`);
+      const terms = funded.find((e) => e.data.pool_id === last.data.pool_id)?.data.terms;
+      const repo = terms && names.repos[terms.repo_id];
+      const file = terms?.workflow.split('/.github/workflows/')[1]?.split('@')[0];
+      if (repo && file) {
+        const runs = await chain.github(`/repos/${repo}/actions/workflows/${file}/runs?status=success&per_page=1`);
+        const run = runs?.workflow_runs?.[0];
+        if (run) show('proof-run', null, run.html_url);
+      }
+    }
+  } catch (err) {
+    console.warn('Could not read the pilot from the chain:', err); // the page still works without the live details
   }
 </script>
 </body>

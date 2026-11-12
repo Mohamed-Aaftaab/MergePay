@@ -1,7 +1,9 @@
 # Copy to .github/workflows/award.yml on the default branch of the repo that pays.
 # The pool pins this exact file: <owner>/<repo>/.github/workflows/award.yml@refs/heads/<default branch>
 #
-# Repo variables: MERGEPAY_CONTRACT, MERGEPAY_POOL_ID, MERGEPAY_NETWORK (testnet|mainnet), MERGEPAY_SUBMITTER
+# Repo variables: MERGEPAY_CONTRACT, MERGEPAY_POOL_ID, MERGEPAY_NETWORK (testnet|mainnet), MERGEPAY_SUBMITTER,
+#                 MERGEPAY_RATES, the rate card in whole tokens, e.g. {"pay:small": "5", "pay:large": "50"}.
+#                 The highest rate among a PR's labels is paid. The pool's on-chain cap still limits every award.
 # Repo secret:    MERGEPAY_SUBMITTER_KEY, a function-call access key limited to the contract's
 #                 award, link and pay methods. It can spend gas on those calls and nothing else.
 name: MergePay award
@@ -23,25 +25,48 @@ jobs:
       POOL_ID: ${{ vars.MERGEPAY_POOL_ID }}
       NETWORK: ${{ vars.MERGEPAY_NETWORK }}
       SUBMITTER: ${{ vars.MERGEPAY_SUBMITTER }}
+      RATES: ${{ vars.MERGEPAY_RATES }}
       SUBMITTER_KEY: ${{ secrets.MERGEPAY_SUBMITTER_KEY }}
       PR_NUMBER: ${{ github.event.pull_request.number }}
       AUTHOR_ID: ${{ github.event.pull_request.user.id }}
       LABELS: ${{ toJSON(github.event.pull_request.labels.*.name) }}
-      # Rate card, in micro-USDC (1 USDC = 1000000). The pool's on-chain cap still limits every award.
-      RATES: '{"pay:small": 5000000, "pay:medium": 20000000, "pay:large": 50000000}'
     steps:
       - name: Award the merged PR
         run: |
           set -euo pipefail
-          amount=$(jq -rn --argjson labels "$LABELS" --argjson rates "$RATES" \
-            '[$labels[] | $rates[.] // empty] | max // 0')
-          if [ "$amount" -le 0 ]; then echo "No pay label on this PR, nothing to award."; exit 0; fi
+          for v in CONTRACT POOL_ID NETWORK SUBMITTER RATES SUBMITTER_KEY; do
+            if [ -z "${!v}" ]; then echo "::error::$v is not set in the repository's variables or secrets"; exit 1; fi
+          done
+
+          # The pool's token and its decimals come from the contract, so rates stay in whole tokens.
+          view() {
+            curl -sSf --retry 3 "https://rpc.$NETWORK.fastnear.com" -H 'Content-Type: application/json' -d "$(jq -cn --arg a "$1" --arg m "$2" \
+              '{jsonrpc:"2.0",id:1,method:"query",params:{request_type:"call_function",finality:"final",account_id:$a,method_name:$m,args_base64:"e30="}}')" \
+              | jq -er '.result.result | implode'
+          }
+          payout_token=$(view "$CONTRACT" get_config | jq -er .usdc)
+          decimals=$(view "$payout_token" ft_metadata | jq -er .decimals)
+
+          amount=$(node -e '
+            const [labels, rates, decimals] = [JSON.parse(process.env.LABELS), JSON.parse(process.env.RATES), Number(process.argv[1])];
+            const toBase = (label) => {
+              const v = String(rates[label]);
+              if (!/^\d+(\.\d+)?$/.test(v)) throw new Error(`rate for ${label} is not a plain number: ${v}`);
+              const [whole, frac = ""] = v.split(".");
+              if (frac.length > decimals) throw new Error(`rate for ${label} has more than ${decimals} decimals`);
+              return BigInt(whole + frac.padEnd(decimals, "0"));
+            };
+            const paid = labels.filter((l) => Object.hasOwn(rates, l)).map(toBase);
+            console.log(paid.reduce((a, b) => (b > a ? b : a), 0n).toString());
+          ' "$decimals")
+          if [ "$amount" = "0" ]; then echo "No pay label on this PR, nothing to award."; exit 0; fi
+          echo "Awarding $amount base units of $payout_token for PR #$PR_NUMBER"
 
           audience="$CONTRACT|award|$POOL_ID|$PR_NUMBER|$AUTHOR_ID|$amount"
           token=$(curl -sSf -H "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" \
             "$ACTIONS_ID_TOKEN_REQUEST_URL&audience=$(jq -rn --arg a "$audience" '$a|@uri')" | jq -r .value)
 
-          npx --yes near-cli-rs@latest contract call-function as-transaction "$CONTRACT" award \
+          npx --yes near-cli-rs@0.31.1 contract call-function as-transaction "$CONTRACT" award \
             json-args "$(jq -cn --arg jwt "$token" '{jwt: $jwt}')" \
             prepaid-gas '300 Tgas' attached-deposit '0 NEAR' \
             sign-as "$SUBMITTER" network-config "$NETWORK" \

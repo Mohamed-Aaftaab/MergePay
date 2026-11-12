@@ -1,0 +1,31 @@
+name: CI
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  contract:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Unit tests (GitHub-shaped tokens signed with a local RSA key)
+        run: cargo test --locked
+      - name: Build the contract for NEAR
+        run: |
+          rustup target add wasm32-unknown-unknown
+          cargo build --locked --target wasm32-unknown-unknown --release
+          ls -l target/wasm32-unknown-unknown/release/mergepay.wasm
+
+  site:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Ledger and CSV tests
+        run: node --test test/ledger.test.mjs

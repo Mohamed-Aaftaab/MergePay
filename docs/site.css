@@ -64,3 +64,6 @@ a { color: inherit; }
 @media (max-width: 420px) {
   .nav-end .pill-outline { display: none; }
 }
+
+/* the hidden attribute must win over display rules like .tag { display: flex } */
+[hidden] { display: none !important; }

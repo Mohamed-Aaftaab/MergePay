@@ -130,6 +130,10 @@ fn award_rejected(c: &mut MergePay, why: &str, token: String) {
 #[test]
 fn tc01_funding_creates_pool() {
     let c = funded();
+    assert_eq!(
+        c.get_config(),
+        json!({"owner": "owner.near", "usdc": "usdc.near", "next_pool": 1})
+    );
     let pool = c.get_pool(0).unwrap();
     assert_eq!(
         (pool.balance.0, pool.terms.repo_id, pool.terms.cap.0),

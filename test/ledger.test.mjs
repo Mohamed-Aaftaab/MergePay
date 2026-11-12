@@ -74,6 +74,14 @@ test('TC-46 amounts to 6 decimals, ISO UTC dates, total equals the sum of Paid r
   assert.equal(nov.totalPaid, '6.500001'); // 5.000000 + 1.500001; Pending and Funded are not paid
 });
 
+test('amounts follow the token decimals the contract reports', () => {
+  const rows = buildRows(EVENTS.slice(0, 3), { explorer: EXPLORER, names, decimals: 24 });
+  assert.equal(rows[1].amount_usdc, '0.000000000000000005000000');
+  assert.equal(rows[1].rate_usd, '0.000000000000000005');
+  assert.equal(statement(rows, '2026-11', 24).totalPaid, '0.000000000000000005000000');
+  assert.equal(formatAmount('7', 0), '7');
+});
+
 test('TC-47 a period with no payments gives the header row only', () => {
   const rows = buildRows(EVENTS, { explorer: EXPLORER, names });
   const { lines, totalPaid } = statement(rows, '2027-01');

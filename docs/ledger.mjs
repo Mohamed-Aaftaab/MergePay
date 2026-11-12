@@ -6,17 +6,18 @@ export const COLUMNS = [
   'explorer_url', 'withdrawal_chain', 'withdrawal_status',
 ];
 
-const DECIMALS = 6;
+const USDC_DECIMALS = 6;
 
-/** Base units (string) to a plain decimal with 6 places, e.g. "5000000" -> "5.000000". */
-export function formatAmount(base) {
-  const s = BigInt(base).toString().padStart(DECIMALS + 1, '0');
-  return `${s.slice(0, -DECIMALS)}.${s.slice(-DECIMALS)}`;
+/** Base units (string) to a plain decimal with the token's places, e.g. "5000000" -> "5.000000" for USDC. */
+export function formatAmount(base, decimals = USDC_DECIMALS) {
+  const s = BigInt(base).toString().padStart(decimals + 1, '0');
+  return decimals === 0 ? s : `${s.slice(0, -decimals)}.${s.slice(-decimals)}`;
 }
 
 /** Same value without trailing zeros, for the rate column: "5000000" -> "5". */
-export function formatRate(base) {
-  return formatAmount(base).replace(/\.?0+$/, '');
+export function formatRate(base, decimals = USDC_DECIMALS) {
+  const s = formatAmount(base, decimals);
+  return s.includes('.') ? s.replace(/\.?0+$/, '') : s;
 }
 
 /**
@@ -45,7 +46,7 @@ const isoDate = (ns) => new Date(Number(BigInt(ns) / 1_000_000n)).toISOString().
  * One row per payment: each funding, each award (its status moves Pending -> Paid or Refunded),
  * each funder refund. `names` holds GitHub lookups: { repos: {id: "org/repo"}, users: {id: login}, labels: {"pool:pr": label} }.
  */
-export function buildRows(events, { explorer, names = {} }) {
+export function buildRows(events, { explorer, names = {}, decimals = USDC_DECIMALS }) {
   const repos = names.repos ?? {}, users = names.users ?? {}, labels = names.labels ?? {};
   const sorted = [...events].sort((a, b) => (BigInt(a.ts) < BigInt(b.ts) ? -1 : BigInt(a.ts) > BigInt(b.ts) ? 1 : 0));
   const poolRepo = {};
@@ -53,25 +54,26 @@ export function buildRows(events, { explorer, names = {} }) {
   const rows = [];
   const blank = () => Object.fromEntries(COLUMNS.map((c) => [c, '']));
   const touch = (row, e) => { row.date_utc = isoDate(e.ts); row.explorer_url = `${explorer}${e.tx}`; };
+  const amount = (v) => formatAmount(v, decimals);
 
   for (const e of sorted) {
     const d = e.data;
     if (e.event === 'funded') {
       if (d.terms) poolRepo[d.pool_id] = String(d.terms.repo_id);
       const row = { ...blank(), repo: repos[poolRepo[d.pool_id]] ?? '', contributor_near_account: d.funder,
-        label: 'funding', amount_usdc: formatAmount(d.amount), status: 'Funded' };
+        label: 'funding', amount_usdc: amount(d.amount), status: 'Funded' };
       touch(row, e);
       rows.push(row);
     } else if (e.event === 'refunded') {
       const row = { ...blank(), repo: repos[poolRepo[d.pool_id]] ?? '', contributor_near_account: d.funder,
-        label: 'refund', amount_usdc: formatAmount(d.amount), status: 'Refunded', refund_tx: e.tx };
+        label: 'refund', amount_usdc: amount(d.amount), status: 'Refunded', refund_tx: e.tx };
       touch(row, e);
       rows.push(row);
     } else if (e.event === 'award') {
       const repo = repos[poolRepo[d.pool_id]] ?? '';
       const row = { ...blank(), repo, pr_number: String(d.pr), pr_url: repo ? `https://github.com/${repo}/pull/${d.pr}` : '',
         contributor_github: users[d.github_id] ?? String(d.github_id), label: labels[`${d.pool_id}:${d.pr}`] ?? '',
-        rate_usd: formatRate(d.amount), amount_usdc: formatAmount(d.amount), status: 'Pending', award_tx: e.tx };
+        rate_usd: formatRate(d.amount, decimals), amount_usdc: amount(d.amount), status: 'Pending', award_tx: e.tx };
       touch(row, e);
       awards.set(`${d.pool_id}:${d.pr}`, row);
       rows.push(row);
@@ -88,10 +90,14 @@ export function buildRows(events, { explorer, names = {} }) {
 }
 
 /** Rows whose date falls in `period` ("YYYY-MM"), plus the total actually paid out. */
-export function statement(rows, period) {
+export function statement(rows, period, decimals = USDC_DECIMALS) {
   const lines = rows.filter((r) => r.date_utc.startsWith(period));
-  const paid = lines.filter((r) => r.status === 'Paid').reduce((sum, r) => sum + BigInt(r.amount_usdc.replace('.', '')), 0n);
-  return { lines, totalPaid: formatAmount(paid) };
+  return { lines, totalPaid: sumAmounts(lines.filter((r) => r.status === 'Paid'), decimals) };
+}
+
+/** Exact total of the rows' amounts (they all carry the same number of places). */
+export function sumAmounts(rows, decimals = USDC_DECIMALS) {
+  return formatAmount(rows.reduce((sum, r) => sum + BigInt(r.amount_usdc.replace('.', '')), 0n), decimals);
 }
 
 function cell(value) {

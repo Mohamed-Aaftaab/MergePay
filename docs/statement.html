@@ -69,13 +69,13 @@
     <li><a href="./">Home</a></li>
     <li><a href="statement.html" aria-current="page">Statement</a></li>
     <li><a href="./#how">How it works</a></li>
-    <li><a href="https://github.com/Mohamed-Aaftaab/MergePay#for-the-bookkeeper">Bookkeeper guide</a></li>
-    <li><a href="https://testnet.nearblocks.io/address/pay.mergepay-482529.testnet">Contract</a></li>
+    <li><a data-repo-link="#for-the-bookkeeper" href="#">Bookkeeper guide</a></li>
+    <li><a data-contract-link href="#">Contract</a></li>
   </ul>
   <div class="nav-end">
-    <span class="chip-net"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c2.8 3 2.8 15 0 18M12 3c-2.8 3-2.8 15 0 18"/></svg>NEAR testnet</span>
+    <span class="chip-net"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c2.8 3 2.8 15 0 18M12 3c-2.8 3-2.8 15 0 18"/></svg>NEAR&nbsp;<span data-network></span></span>
     <button class="pill pill-white" id="fund" type="button">Fund</button>
-    <a class="pill pill-outline" href="https://github.com/Mohamed-Aaftaab/MergePay">View code</a>
+    <a class="pill pill-outline" data-repo-link="" href="#">View code</a>
   </div>
 </nav>
 <main>
@@ -108,155 +108,43 @@
     <div class="scroll"><table id="table" hidden>
       <thead><tr>
         <th>Date (UTC)</th><th>Pull request</th><th>Contributor</th><th>Label</th>
-        <th class="num">Rate (USD)</th><th class="num">Amount (USDC)</th><th>Status</th><th>Transaction</th>
+        <th class="num">Rate</th><th class="num">Amount (<span class="symbol">USDC</span>)</th><th>Status</th><th>Transaction</th>
       </tr></thead>
       <tbody id="rows"></tbody>
       <tfoot><tr><td colspan="5">Total paid in period</td><td class="num" id="foot-total"></td><td colspan="2"></td></tr></tfoot>
     </table></div>
   </section>
 
-  <p class="note">Amounts are in USDC base units shown with 6 decimals. The testnet pilot uses wrapped NEAR as a stand-in token,
-    so its amounts are the same base units, not real dollars. Due date is 7 days after the period ends.</p>
+  <p class="note" id="note">Amounts are in the token the contract pays out, as it reports itself.</p>
 </main>
 
 <dialog id="fund-dialog" aria-labelledby="fund-title">
   <h2 id="fund-title">Fund a pool</h2>
-  <p>Send USDC to the contract with the pool id as the message. Paying from another chain or token through 1Click is not built yet.</p>
+  <p>Send <span class="symbol">USDC</span> to the contract with the pool id as the message. Paying from another chain or token through 1Click is not built yet.</p>
   <pre id="fund-cmd"></pre>
   <p class="note">To open a new pool for another repository, put the pool terms JSON in <code>msg</code> instead of the pool id. See the README.</p>
   <form method="dialog"><button class="pill pill-white" type="submit">Close</button></form>
 </dialog>
 
 <script type="module">
-import { buildRows, eventsFromOutcomes, formatAmount, statement, toCsv } from './ledger.mjs';
+import { SITE, settings } from './config.mjs';
+import { reader } from './chain.mjs';
+import { buildRows, statement, sumAmounts, toCsv, formatAmount } from './ledger.mjs';
 
-const params = new URLSearchParams(location.search);
-const contract = params.get('contract') || 'pay.mergepay-482529.testnet';
-const network = contract.endsWith('.testnet') ? 'testnet' : 'mainnet';
-const API = network === 'testnet' ? 'https://api-testnet.nearblocks.io/v3' : 'https://api.nearblocks.io/v3';
-const RPC = network === 'testnet' ? 'https://rpc.testnet.near.org' : 'https://rpc.mainnet.near.org';
-const EXPLORER = network === 'testnet' ? 'https://testnet.nearblocks.io/txns/' : 'https://nearblocks.io/txns/';
-const USDC = network === 'testnet' ? 'wrap.testnet' : '17208628f84f5d6ad33f0da3bbbeb27ffcb398eac501a31bd6ad2011e36133a1';
-const FINAL_AFTER_MS = 10 * 60 * 1000; // a transaction this old is final and fully indexed, so it is safe to cache
-const DEMO = 'pay.mergepay-482529.testnet';
-// Pool 0 on the demo contract was a smoke test with made-up GitHub ids that belong to unrelated real people.
-const poolFilter = (params.get('pools') ?? (contract === DEMO ? '1' : '')).split(',').filter(Boolean).map(Number);
-const inPools = (e) => poolFilter.length === 0 || !('pool_id' in e.data) || poolFilter.includes(e.data.pool_id);
-
+const cfg = settings();
 const $ = (id) => document.getElementById(id);
-const cache = {
-  get(k) { try { return JSON.parse(localStorage.getItem(k)); } catch { return null; } },
-  set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch { /* storage full or blocked: just refetch next time */ } },
-};
-const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const say = (text, isError = false) => { $('status').hidden = false; $('status').textContent = text; $('status').classList.toggle('error', isError); };
+const chain = reader(cfg, say);
 
-async function getJson(url, tries = 6) {
-  for (let i = 0; i < tries; i++) {
-    const res = await fetch(url);
-    if (res.status === 429) { say(`The block explorer is rate limiting us, waiting… (${i + 1}/${tries})`); await sleep(12000); continue; }
-    if (!res.ok) throw new Error(`${url} returned ${res.status}`);
-    return res.json();
-  }
-  throw new Error('The block explorer kept rate limiting. Try again in a minute.');
-}
-
-// The explorer only lists which transactions touched the contract (one call per 100 receipts, it rate limits hard);
-// the logs come from NEAR RPC, which finds a transaction by hash alone.
-async function receiptIndex() {
-  const txs = new Map(); // hash -> earliest block timestamp
-  const times = {}; // receipt id -> block timestamp
-  let next = '';
-  do {
-    say('Listing contract activity…');
-    const page = await getJson(`${API}/accounts/${contract}/receipts?limit=100${next ? `&next=${encodeURIComponent(next)}` : ''}`);
-    for (const r of page.data ?? []) {
-      const ts = r.block?.block_timestamp ?? r.included_in_block_timestamp;
-      times[r.receipt_id] = ts;
-      if (!txs.has(r.transaction_hash) || BigInt(ts) < BigInt(txs.get(r.transaction_hash))) txs.set(r.transaction_hash, ts);
-    }
-    next = page.meta?.next_page ?? '';
-  } while (next);
-  return { txs, times };
-}
-
-async function rpc(method, params) {
-  const res = await fetch(RPC, { method: 'POST', headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ jsonrpc: '2.0', id: 1, method, params }) }).then((r) => r.json());
-  if (res.error) throw new Error(`RPC ${method}: ${res.error.cause?.name ?? res.error.message}`);
-  return res.result;
-}
-
-async function loadEvents() {
-  const { txs, times } = await receiptIndex();
-  const events = [];
-  let done = 0;
-  // a few at a time keeps public RPC happy
-  const work = [...txs];
-  const worker = async () => {
-    for (let item = work.shift(); item; item = work.shift()) {
-      const [hash, ts] = item;
-      const key = `mergepay:${network}:tx:${hash}`;
-      let found = cache.get(key);
-      if (!found) {
-        const tx = await rpc('tx', { tx_hash: hash, sender_account_id: contract, wait_until: 'FINAL' });
-        found = eventsFromOutcomes(tx.receipts_outcome, contract, hash, times, ts);
-        if (Date.now() - Number(BigInt(ts) / 1_000_000n) > FINAL_AFTER_MS) cache.set(key, found);
-      }
-      events.push(...found);
-      say(`Reading transactions… ${++done} of ${txs.size}`);
-    }
-  };
-  await Promise.all([worker(), worker(), worker(), worker()]);
-  return events;
-}
-
-async function github(path) {
-  const key = `mergepay:gh:${path}`;
-  const hit = cache.get(key);
-  if (hit) return hit;
-  const res = await fetch(`https://api.github.com${path}`);
-  if (!res.ok) return null; // unauthenticated limit is 60 an hour; names just fall back to ids
-  const body = await res.json();
-  cache.set(key, body);
-  return body;
-}
-
-async function githubNames(events) {
-  const names = { repos: {}, users: {}, labels: {} };
-  const poolRepo = {};
-  for (const e of events) if (e.event === 'funded' && e.data.terms) poolRepo[e.data.pool_id] = String(e.data.terms.repo_id);
-  for (const id of new Set(Object.values(poolRepo))) {
-    const repo = await github(`/repositories/${id}`);
-    if (repo) names.repos[id] = repo.full_name;
-  }
-  for (const e of events.filter((x) => x.event === 'award')) {
-    const { pool_id, pr, github_id } = e.data;
-    if (!(github_id in names.users)) {
-      const user = await github(`/user/${github_id}`);
-      if (user) names.users[github_id] = user.login;
-    }
-    const repo = names.repos[poolRepo[pool_id]];
-    if (repo) {
-      const issue = await github(`/repos/${repo}/issues/${pr}`);
-      const label = issue?.labels?.map((l) => l.name).find((n) => n.startsWith('pay:'));
-      if (label) names.labels[`${pool_id}:${pr}`] = label;
-    }
-  }
-  return names;
-}
-
-async function unspentInPools(events) {
-  const ids = [...new Set(events.filter((e) => e.event === 'funded').map((e) => e.data.pool_id))];
-  let total = 0n;
-  for (const pool_id of ids) {
-    const res = await rpc('query', { request_type: 'call_function', finality: 'final', account_id: contract,
-      method_name: 'get_pool', args_base64: btoa(JSON.stringify({ pool_id })) });
-    const pool = JSON.parse(new TextDecoder().decode(new Uint8Array(res.result)));
-    if (pool) total += BigInt(pool.balance);
-  }
-  return total;
-}
+for (const a of document.querySelectorAll('[data-contract-link]')) a.href = cfg.accountUrl(cfg.contract);
+for (const a of document.querySelectorAll('[data-repo-link]')) a.href = `https://github.com/${SITE.repo}${a.dataset.repoLink}`;
+for (const el of document.querySelectorAll('[data-network]')) el.textContent = cfg.network;
+$('contract-link').textContent = cfg.contract;
+$('contract-link').href = cfg.accountUrl(cfg.contract);
+$('network').textContent = cfg.network;
+if (cfg.pools.length) $('pool-note').textContent = `, pool ${cfg.pools.join(', ')}`;
+const params = new URLSearchParams(location.search);
+$('period').value = params.get('period') || new Date().toISOString().slice(0, 7);
 
 function cellLink(href, text) {
   const td = document.createElement('td');
@@ -273,14 +161,17 @@ function download(name, rows) {
   setTimeout(() => URL.revokeObjectURL(a.href), 1000);
 }
 
-function render(rows, period) {
-  const { lines, totalPaid } = statement(rows, period);
-  const pending = rows.filter((r) => r.status === 'Pending').reduce((s, r) => s + BigInt(r.amount_usdc.replace('.', '')), 0n);
+let rows = [];
+let pools = [];
+let tok = null;
+
+function render(period) {
+  const { lines, totalPaid } = statement(rows, period, tok.decimals);
   $('t-paid').textContent = totalPaid;
-  $('t-pending').textContent = formatAmount(pending);
+  $('t-pending').textContent = sumAmounts(rows.filter((r) => r.status === 'Pending'), tok.decimals);
   $('foot-total').textContent = totalPaid;
   const [y, m] = period.split('-').map(Number);
-  $('t-due').textContent = new Date(Date.UTC(y, m, 7)).toISOString().slice(0, 10);
+  $('t-due').textContent = new Date(Date.UTC(y, m, cfg.dueDays)).toISOString().slice(0, 10);
 
   const body = $('rows');
   body.replaceChildren();
@@ -308,37 +199,35 @@ function render(rows, period) {
   $('csv-period').disabled = $('csv-all').disabled = false;
 }
 
-$('contract-link').textContent = contract;
-$('contract-link').href = `${EXPLORER.replace('/txns/', '/address/')}${contract}`;
-$('network').textContent = network;
-if (poolFilter.length) $('pool-note').textContent = `, pool ${poolFilter.join(', ')}`;
-$('period').value = params.get('period') || new Date().toISOString().slice(0, 7);
-
-let rows = [];
-let pools = [];
 $('period').addEventListener('change', () => {
-  if (!/^\d{4}-\d{2}$/.test($('period').value)) return;
+  if (!/^\d{4}-\d{2}$/.test($('period').value) || !tok) return;
   const url = new URL(location.href);
   url.searchParams.set('period', $('period').value);
   history.replaceState(null, '', url);
-  render(rows, $('period').value);
+  render($('period').value);
 });
 $('fund').addEventListener('click', () => {
   const pool = pools.at(-1) ?? 0;
-  $('fund-cmd').textContent = `near contract call-function as-transaction ${USDC} ft_transfer_call \\
-  json-args '{"receiver_id":"${contract}","amount":"<base units>","msg":"${pool}"}' \\
+  $('fund-cmd').textContent = `near contract call-function as-transaction ${tok?.account ?? '<token contract>'} ft_transfer_call \\
+  json-args '{"receiver_id":"${cfg.contract}","amount":"<base units>","msg":"${pool}"}' \\
   prepaid-gas '100 Tgas' attached-deposit '1 yoctoNEAR' \\
-  sign-as <your account> network-config ${network} sign-with-keychain send`;
+  sign-as <your account> network-config ${cfg.network} sign-with-keychain send`;
   $('fund-dialog').showModal();
 });
 
 try {
-  const events = (await loadEvents()).filter(inPools);
+  say('Reading the contract…');
+  tok = await chain.token();
+  for (const el of document.querySelectorAll('.symbol')) el.textContent = tok.symbol;
+  $('note').textContent = `Amounts are in ${tok.symbol} (${tok.account}), the token this contract pays out, with its ${tok.decimals} decimals. `
+    + `The due date is ${cfg.dueDays} days after the period ends.`
+    + (tok.symbol === 'USDC' ? '' : ' This deployment pays in a stand-in token, so the amounts are not dollars.');
+  const { events } = await chain.events();
   pools = [...new Set(events.filter((e) => e.event === 'funded').map((e) => e.data.pool_id))].sort((a, b) => a - b);
   say('Looking up GitHub names…');
-  rows = buildRows(events, { explorer: EXPLORER, names: await githubNames(events) });
-  render(rows, $('period').value);
-  $('t-pools').textContent = formatAmount(await unspentInPools(events));
+  rows = buildRows(events, { explorer: cfg.txUrl(''), names: await chain.names(events), decimals: tok.decimals });
+  render($('period').value);
+  $('t-pools').textContent = formatAmount(await chain.unspent(events), tok.decimals);
 } catch (err) {
   say(`Could not load the statement: ${err.message}`, true);
 }

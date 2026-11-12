@@ -519,6 +519,11 @@ impl MergePay {
         self.key_change_until
     }
 
+    /// Lets clients find the payout token (and its decimals) instead of assuming one.
+    pub fn get_config(&self) -> serde_json::Value {
+        json!({ "owner": self.owner, "usdc": self.usdc, "next_pool": self.next_pool })
+    }
+
     fn pool(&self, pool_id: u64) -> Pool {
         self.pools
             .get(&pool_id)
