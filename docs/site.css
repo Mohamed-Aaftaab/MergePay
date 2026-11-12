@@ -1,0 +1,66 @@
+/* Shared look for every MergePay page: black night, glass, gradient display type. */
+:root {
+  --night: #07060b;
+  --ink: #f4f2f8;
+  --muted: #a49fb3;
+  --faint: #6f6a7e;
+  --glass: rgb(255 255 255 / 0.06);
+  --glass-strong: rgb(255 255 255 / 0.1);
+  --glass-line: rgb(255 255 255 / 0.14);
+  --pink: #f5b8de;
+  --lilac: #c6b6ff;
+  --magenta: #e03fd0;
+  --blue: #3d4dff;
+  --red: #ff3355;
+  --paid: #7be0ae;
+  --pending: #ffd27a;
+  --funded: #9fb6ff;
+  --refunded: #d6b8ff;
+  --error: #ff8a80;
+  --display: "Inter", system-ui, sans-serif;
+  --body: "Poppins", system-ui, sans-serif;
+  --ease: cubic-bezier(0.16, 1, 0.3, 1);
+  color-scheme: dark;
+}
+
+* { box-sizing: border-box; }
+html { background: var(--night); }
+/* only html paints the night: a body background would cover fixed layers with a negative z-index */
+body { margin: 0; color: var(--ink); font: 400 15px/1.6 var(--body); -webkit-font-smoothing: antialiased; }
+a { color: inherit; }
+:focus-visible { outline: 2px solid var(--lilac); outline-offset: 3px; border-radius: 6px; }
+
+/* ---- Nav ---- */
+.nav { position: relative; z-index: 5; display: flex; align-items: center; gap: 28px; padding: 22px clamp(16px, 4vw, 48px); }
+.brand { display: flex; align-items: center; gap: 10px; font-weight: 600; font-size: 19px; letter-spacing: -0.01em; text-decoration: none; }
+.brand-mark { font: 600 20px/1 var(--display); letter-spacing: -0.12em; background: linear-gradient(90deg, var(--pink), var(--lilac)); -webkit-background-clip: text; background-clip: text; color: transparent; }
+.nav-links { display: flex; gap: 6px; list-style: none; margin: 0 auto; padding: 0; }
+.nav-links a { display: flex; align-items: center; gap: 8px; padding: 8px 14px; border-radius: 999px; color: var(--muted); font-size: 14px; font-weight: 500; text-decoration: none; transition: color 0.2s, background 0.2s; }
+.nav-links a:hover { color: var(--ink); background: var(--glass); }
+.nav-links a[aria-current="page"] { color: var(--ink); }
+
+.nav-end { display: flex; align-items: center; gap: 10px; }
+.chip-net { display: flex; align-items: center; gap: 7px; padding: 7px 12px; color: var(--muted); font-size: 13px; font-weight: 500; }
+.chip-net svg { width: 15px; height: 15px; }
+
+/* ---- Buttons and glass ---- */
+.pill { display: inline-flex; align-items: center; gap: 8px; padding: 10px 20px; border-radius: 999px; font: 500 14px/1 var(--body); text-decoration: none; cursor: pointer; border: 1px solid transparent; transition: transform 0.2s var(--ease), background 0.2s, box-shadow 0.2s; }
+.pill:active { transform: scale(0.97); }
+.pill-white { background: #fff; color: #0b0a10; }
+.pill-white:hover { box-shadow: 0 0 0 4px rgb(255 255 255 / 0.12), 0 8px 30px rgb(198 182 255 / 0.35); }
+.pill-outline { border-color: var(--glass-line); color: var(--ink); background: transparent; }
+.pill-outline:hover { background: var(--glass); }
+.pill:disabled { opacity: 0.45; cursor: default; box-shadow: none; }
+.glass { background: var(--glass); border: 1px solid var(--glass-line); -webkit-backdrop-filter: blur(14px) saturate(140%); backdrop-filter: blur(14px) saturate(140%); }
+
+/* ---- Display type ---- */
+.display { font: 300 clamp(36px, 5.2vw, 66px)/1.08 var(--display); font-variation-settings: "opsz" 32; letter-spacing: -0.035em; margin: 0; }
+.display .line { display: block; background: linear-gradient(90deg, var(--pink) 0%, #fff 24%, #fff 76%, var(--lilac) 100%); -webkit-background-clip: text; background-clip: text; color: transparent; }
+
+@media (max-width: 960px) {
+  .nav-links, .chip-net { display: none; }
+  .nav { justify-content: space-between; }
+}
+@media (max-width: 420px) {
+  .nav-end .pill-outline { display: none; }
+}
