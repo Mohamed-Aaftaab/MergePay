@@ -45,12 +45,27 @@ Until the contract has had an independent review, fund pools with small amounts 
 
 | Piece | State |
 | --- | --- |
-| Contract: pools, awards, on-chain RS256 check, account links, payouts, refunds, key time-lock | Written, 21 unit tests pass |
+| Contract: pools, awards, on-chain RS256 check, account links, payouts, refunds, key time-lock | Deployed on testnet, 21 unit tests pass |
 | Award and link workflows (`workflows/`) | Written, not yet run on GitHub |
-| Testnet deploy and gas measurement of the RSA check | Not done |
+| Testnet run: fund, award, link, payout, replay rejected | Done with locally signed GitHub-shaped tokens (see below). Not yet run with a real GitHub token or on mainnet |
 | CSV export and statement page | Not built |
 | Gasless delegate actions (NEP-366) for fund, refund, withdraw | Not built. Awards and links need no user signature: the workflow submits them with a key that can only call this contract |
 | 1Click funding and cross-chain withdrawal | Not built |
+
+## Testnet run and gas report (Nov 12, 2026)
+
+Contract: `pay.mergepay-482529.testnet`. Testnet has no convenient USDC, so wrapped NEAR
+(`wrap.testnet`, also a NEP-141 token) stands in for it. The contract is registered with GitHub's
+live signing keys plus one test key; the tokens below were GitHub-shaped and signed with the test key.
+
+| Step | Gas used | Limit | Transaction |
+| --- | --- | --- | --- |
+| Fund a pool (`ft_transfer_call`) | 7.1 TGas | 300 | [Bdfof8s1…](https://testnet.nearblocks.io/txns/Bdfof8s13HGozPJLzFT86romsePwyAWA4mqgWurp1hin) |
+| Award: RSA-2048 signature check and claim checks | 19.9 TGas | 300 | [Cny9Sfk…](https://testnet.nearblocks.io/txns/Cny9SfkAtckcTApahq1MKJfFopXs8ZVFAXmRkQLtqGC) |
+| Link, storage registration, payout and confirmation | 26.3 TGas | 300 | [5Y7Sps1…](https://testnet.nearblocks.io/txns/5Y7Sps1TFiKGhTrHLhuATPh1cjwopAUrXCUetgRLA5EP) |
+| Same award submitted again | rejected: "PR already awarded" | | [D2GjUHY…](https://testnet.nearblocks.io/txns/D2GjUHYDDZ71ULAntxR4huQ2BEUB8q3wzHHEap5vVF3d) |
+
+The on-chain RSA check uses under 7% of the per-call gas limit, so no off-chain attester is needed.
 
 ## For developers
 
@@ -59,8 +74,10 @@ cargo test
 ```
 
 ```bash
-cargo build --target wasm32-unknown-unknown --release
+cargo near build non-reproducible-wasm --no-abi
 ```
+
+`--no-abi` is only needed on Windows, where ABI generation does not link.
 
 Contract methods:
 
