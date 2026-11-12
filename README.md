@@ -101,7 +101,7 @@ exponentiation comes from `num-bigint`; the hash is NEAR's `sha256` host functio
 ## Credits and reuse
 
 The idea comes from the earlier MergePay project on Arc (Solidity), by the same author
-(TODO: link to that repository). That project is a design reference only. No Solidity, library or workflow file was
+(link to that repository to be added). That project is a design reference only. No Solidity, library or workflow file was
 copied; everything here was written from GitHub's OIDC documentation, RFC 8017 and NEAR's
 documentation during the hackathon window.
 
