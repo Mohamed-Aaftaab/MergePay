@@ -46,7 +46,7 @@ Until the contract has had an independent review, fund pools with small amounts 
 | Piece | State |
 | --- | --- |
 | Contract: pools, awards, on-chain RS256 check, account links, payouts, refunds, key time-lock | Deployed on testnet, 21 unit tests pass |
-| Award and link workflows (`workflows/`) | Written, not yet run on GitHub |
+| Award and link workflows (`.github/workflows/`) | Written, not yet run on GitHub |
 | Testnet run: fund, award, link, payout, replay rejected | Done with locally signed GitHub-shaped tokens (see below). Not yet run with a real GitHub token or on mainnet |
 | CSV export and statement page | Not built |
 | Gasless delegate actions (NEP-366) for fund, refund, withdraw | Not built. Awards and links need no user signature: the workflow submits them with a key that can only call this contract |
