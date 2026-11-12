@@ -90,8 +90,16 @@ same contract paid a real merge in this repository using only GitHub's signature
 
 That first award paid 5000000 base units: the rate card was then written in micro-USDC and sent
 as-is, which on a 24-decimal token is dust. The workflow now reads the pool token's decimals from
-the contract and the rate card is in whole tokens, so pool 2 pays 0.01 wNEAR for `pay:small`. The
-submitting key is a function-call key that can only call `award`, `link` and `pay` on this contract.
+the contract and the rate card is in whole tokens. The next merge used it:
+
+| Step | What happened | Proof |
+| --- | --- | --- |
+| Pool 2 funded | 0.4 wrapped NEAR, cap 0.1 per award | [GHteVd8…](https://testnet.near.rocks/tx/GHteVd8ma5ok83YDNKS2Tm48kBCufjnYqXR7VCWT9yWH) |
+| [PR #2](https://github.com/Mohamed-Aaftaab/MergePay/pull/2) merged with `pay:small` (rate `0.01`) | The workflow converted 0.01 wNEAR to base units using the token's 24 decimals | [workflow run](https://github.com/Mohamed-Aaftaab/MergePay/actions/runs/43251874709) |
+| Award verified and paid in one transaction | The author was already linked, so the payout followed straight away. 27.3 TGas, about 12 seconds after the merge | [7TyNAy1…](https://testnet.near.rocks/tx/7TyNAy1gcResu26VCEmA3PmgtbqxrqSWRUa6xGaMXhPi) |
+
+The submitting key is a function-call key that can only call `award`, `link` and `pay` on this
+contract.
 
 ## Statement page and CSV
 
