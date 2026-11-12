@@ -1,0 +1,3 @@
+# aws-lc-sys (pulled in by near-sdk unit-testing) needs NASM on Windows unless told to use its prebuilt objects
+[env]
+AWS_LC_SYS_PREBUILT_NASM = "1"

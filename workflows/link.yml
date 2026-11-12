@@ -1,0 +1,39 @@
+# For contributors. Copy to .github/workflows/link.yml in ANY repository you personally own
+# (not an organisation's), then run it from the Actions tab with your NEAR account.
+# GitHub signs "user <you> wants payouts at <account>". The token it prints is safe to share:
+# it can only link your GitHub user to the account you typed, and a newer one always wins.
+name: MergePay link payout account
+on:
+  workflow_dispatch:
+    inputs:
+      near_account:
+        description: NEAR account that receives your payouts
+        required: true
+      contract:
+        description: MergePay contract account
+        required: true
+
+permissions:
+  id-token: write
+
+jobs:
+  link:
+    runs-on: ubuntu-latest
+    env:
+      NEAR_ACCOUNT: ${{ inputs.near_account }}
+      CONTRACT: ${{ inputs.contract }}
+    steps:
+      - name: Get the GitHub-signed link token
+        run: |
+          set -euo pipefail
+          if ! [[ "$NEAR_ACCOUNT" =~ ^[a-z0-9._-]{2,64}$ && "$CONTRACT" =~ ^[a-z0-9._-]{2,64}$ ]]; then
+            echo "That does not look like a NEAR account."; exit 1
+          fi
+          audience="$CONTRACT|link|$NEAR_ACCOUNT"
+          token=$(curl -sSf -H "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" \
+            "$ACTIONS_ID_TOKEN_REQUEST_URL&audience=$(jq -rn --arg a "$audience" '$a|@uri')" | jq -r .value)
+          echo "Send this token to whoever pays you, or submit it yourself:"
+          echo "  near contract call-function as-transaction $CONTRACT link json-args '{\"jwt\":\"<token>\"}' ..."
+          # base64 once more so GitHub does not mask it in the log
+          echo "$token" | base64 -w0; echo
+          echo "(decode with: base64 -d)"

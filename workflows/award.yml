@@ -1,0 +1,48 @@
+# Copy to .github/workflows/award.yml on the default branch of the repo that pays.
+# The pool pins this exact file: <owner>/<repo>/.github/workflows/award.yml@refs/heads/<default branch>
+#
+# Repo variables: MERGEPAY_CONTRACT, MERGEPAY_POOL_ID, MERGEPAY_NETWORK (testnet|mainnet), MERGEPAY_SUBMITTER
+# Repo secret:    MERGEPAY_SUBMITTER_KEY, a function-call access key limited to the contract's
+#                 award, link and pay methods. It can spend gas on those calls and nothing else.
+name: MergePay award
+on:
+  pull_request_target:
+    types: [closed]
+
+permissions:
+  id-token: write # lets the job ask GitHub for a signed token
+  contents: read
+
+jobs:
+  award:
+    if: github.event.pull_request.merged == true
+    runs-on: ubuntu-latest
+    # No checkout: this job never runs code from the PR. PR data reaches the script only through env.
+    env:
+      CONTRACT: ${{ vars.MERGEPAY_CONTRACT }}
+      POOL_ID: ${{ vars.MERGEPAY_POOL_ID }}
+      NETWORK: ${{ vars.MERGEPAY_NETWORK }}
+      SUBMITTER: ${{ vars.MERGEPAY_SUBMITTER }}
+      SUBMITTER_KEY: ${{ secrets.MERGEPAY_SUBMITTER_KEY }}
+      PR_NUMBER: ${{ github.event.pull_request.number }}
+      AUTHOR_ID: ${{ github.event.pull_request.user.id }}
+      LABELS: ${{ toJSON(github.event.pull_request.labels.*.name) }}
+      # Rate card, in micro-USDC (1 USDC = 1000000). The pool's on-chain cap still limits every award.
+      RATES: '{"pay:small": 5000000, "pay:medium": 20000000, "pay:large": 50000000}'
+    steps:
+      - name: Award the merged PR
+        run: |
+          set -euo pipefail
+          amount=$(jq -rn --argjson labels "$LABELS" --argjson rates "$RATES" \
+            '[$labels[] | $rates[.] // empty] | max // 0')
+          if [ "$amount" -le 0 ]; then echo "No pay label on this PR, nothing to award."; exit 0; fi
+
+          audience="$CONTRACT|award|$POOL_ID|$PR_NUMBER|$AUTHOR_ID|$amount"
+          token=$(curl -sSf -H "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" \
+            "$ACTIONS_ID_TOKEN_REQUEST_URL&audience=$(jq -rn --arg a "$audience" '$a|@uri')" | jq -r .value)
+
+          npx --yes near-cli-rs@latest contract call-function as-transaction "$CONTRACT" award \
+            json-args "$(jq -cn --arg jwt "$token" '{jwt: $jwt}')" \
+            prepaid-gas '300 Tgas' attached-deposit '0 NEAR' \
+            sign-as "$SUBMITTER" network-config "$NETWORK" \
+            sign-with-plaintext-private-key "$SUBMITTER_KEY" send
