@@ -46,8 +46,8 @@ Until the contract has had an independent review, fund pools with small amounts 
 | Piece | State |
 | --- | --- |
 | Contract: pools, awards, on-chain RS256 check, account links, payouts, refunds, key time-lock | Deployed on testnet, 21 unit tests pass |
-| Award and link workflows (`.github/workflows/`) | Written, not yet run on GitHub |
-| Testnet run: fund, award, link, payout, replay rejected | Done with locally signed GitHub-shaped tokens (see below). Not yet run with a real GitHub token or on mainnet |
+| Award and link workflows (`.github/workflows/`) | Running in this repository |
+| Real merged PR paid on testnet, verified with GitHub's own signature | Done (see below). Not yet run on mainnet or with USDC |
 | CSV export and statement page | Not built |
 | Gasless delegate actions (NEP-366) for fund, refund, withdraw | Not built. Awards and links need no user signature: the workflow submits them with a key that can only call this contract |
 | 1Click funding and cross-chain withdrawal | Not built |
@@ -66,6 +66,24 @@ live signing keys plus one test key; the tokens below were GitHub-shaped and sig
 | Same award submitted again | rejected: "PR already awarded" | | [D2GjUHY…](https://testnet.nearblocks.io/txns/D2GjUHYDDZ71ULAntxR4huQ2BEUB8q3wzHHEap5vVF3d) |
 
 The on-chain RSA check uses under 7% of the per-call gas limit, so no off-chain attester is needed.
+
+### A real pull request, paid
+
+After the run above, the test key was revoked
+([6SRqBYR…](https://testnet.nearblocks.io/txns/6SRqBYRdzYe2CM68H9GyDnXa6HCvH1q4ES8BPcTwJ1dd)) and
+the same contract paid a real merge in this repository, using only GitHub's signature:
+
+| Step | What happened | Proof |
+| --- | --- | --- |
+| Pool 1 funded for this repository | 0.5 wrapped NEAR, pinned to `award.yml` on `main` | [ERE53i7…](https://testnet.nearblocks.io/txns/ERE53i77N9xxnMEUoBXT7JMfT8DqbgsdCdKgFdDhdkvT) |
+| [PR #1](https://github.com/Mohamed-Aaftaab/MergePay/pull/1) merged with label `pay:small` | The workflow asked GitHub for a signed token and submitted it | [workflow run](https://github.com/Mohamed-Aaftaab/MergePay/actions/runs/43211106314) |
+| Award verified on-chain | 20.0 TGas, status Pending (author had no linked account) | [8F9DjV9…](https://testnet.nearblocks.io/txns/8F9DjV9KLVKuBj7hejkyA7ZqGXwW4BEqXVzEnn19nMUA) |
+| Author linked a NEAR account | GitHub-signed link token from the link workflow | [workflow run](https://github.com/Mohamed-Aaftaab/MergePay/actions/runs/43211216176) |
+| Link verified, award paid | 26.9 TGas, status Paid | [fLg1irr…](https://testnet.nearblocks.io/txns/fLg1irrCa4L5zJ93bJ9DYWuoxwfjMnSVtQCdGhUNGWz) |
+
+The rate card is written in micro-USDC, so on the 24-decimal stand-in token the amount paid is tiny
+(5000000 base units). The submitting key is a function-call key that can only call `award`, `link`
+and `pay` on this contract.
 
 ## For developers
 
