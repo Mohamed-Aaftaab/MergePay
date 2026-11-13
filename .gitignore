@@ -1,2 +1,5 @@
 target/
 .env
+docs/.vercel
+.vercel
+docs/.env*

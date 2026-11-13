@@ -229,7 +229,8 @@ try {
   render($('period').value);
   $('t-pools').textContent = formatAmount(await chain.unspent(events), tok.decimals);
 } catch (err) {
-  say(`Could not load the statement: ${err.message}`, true);
+  const missing = /UNKNOWN_ACCOUNT|CodeDoesNotExist|MethodNotFound/.test(err.message);
+  say(missing ? `There is no MergePay contract at ${cfg.contract} on NEAR ${cfg.network}.` : `Could not load the statement: ${err.message}`, true);
 }
 </script>
 </body>
