@@ -8,7 +8,7 @@ contract checks GitHub's signature, and the contract pays the developer in USDC.
 
 Built for NEAR HACKATHON (Nov 1–14, 2026), track 08 Real-World Money.
 
-**Try it:** [site](https://mergepay-near.vercel.app/) ([GitHub Pages mirror](https://mohamed-aaftaab.github.io/MergePay/)) ·
+**Try it:** [console](https://mergepay-near.vercel.app/console.html) · [site](https://mergepay-near.vercel.app/) ([GitHub Pages mirror](https://mohamed-aaftaab.github.io/MergePay/)) ·
 [payroll statement and CSV](https://mergepay-near.vercel.app/statement.html?period=2026-11) ·
 [contract on testnet](https://testnet.near.rocks/account/pay.mergepay-482529.testnet) ·
 [merged PRs that were paid](https://github.com/Mohamed-Aaftaab/MergePay/pulls?q=is%3Apr+is%3Amerged+label%3Apay%3Asmall)
