@@ -1,0 +1,163 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Proof · MergePay</title>
+<meta name="description" content="Re-check any MergePay payout: the GitHub-signed token, what the contract verified, and the signature, checked in your browser.">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%2307060b'/%3E%3Ctext x='16' y='22' font-family='Arial' font-size='15' font-weight='700' text-anchor='middle' fill='%23c6b6ff'%3E//%3C/text%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:opsz,wght@14..32,300..600&family=JetBrains+Mono:wght@400;600&family=Poppins:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="site.css">
+<link rel="stylesheet" href="console.css">
+</head>
+<body class="console">
+<div class="app">
+  <aside class="side" id="side"></aside>
+  <div class="main">
+    <header class="topbar" id="topbar"></header>
+    <main class="page" id="page">
+      <div class="page-head">
+        <div>
+          <p class="eyebrow" id="eyebrow">Proof</p>
+          <h1 id="title"><span class="sk" style="width:12ch"></span></h1>
+          <p>Everything below comes from the award transaction itself: the token GitHub signed, and what the contract checked before paying.</p>
+        </div>
+        <label class="field" style="min-width:260px"><span class="faint" style="font-size:13px">Payout</span><select id="pick" style="background:transparent;border:0;color:var(--ink);font:14px var(--body);padding:9px 0;width:100%"></select></label>
+      </div>
+
+      <div class="grid two">
+        <div class="grid">
+          <section class="card" aria-labelledby="sig-h">
+            <div class="card-h"><h2 id="sig-h">Check GitHub's signature yourself</h2><span class="faint mono">RS256</span></div>
+            <div class="card-b grid">
+              <p class="muted" style="margin:0">Your browser fetches the key the contract trusts for this token, then verifies GitHub's signature over the token with WebCrypto. Nothing is sent anywhere.</p>
+              <div><button class="btn primary" id="verify" type="button" disabled>Verify signature</button></div>
+              <div id="verdict"></div>
+            </div>
+          </section>
+          <section class="card" aria-labelledby="checks-h">
+            <div class="card-h"><h2 id="checks-h">What the contract checked</h2><span class="faint mono" id="checks-n"></span></div>
+            <div class="card-b"><ul class="checks" id="checks"><li><span class="sk" style="width:70%"></span></li></ul></div>
+          </section>
+        </div>
+        <section class="card" aria-labelledby="tl-h">
+          <div class="card-h"><h2 id="tl-h">From merge to payout</h2></div>
+          <div class="card-b"><div class="timeline" id="timeline"><span class="sk" style="width:80%"></span></div></div>
+        </section>
+      </div>
+
+      <section class="card" style="margin-top:16px" aria-labelledby="claims-h">
+        <div class="card-h"><h2 id="claims-h">Token GitHub signed</h2><button class="btn" id="copy" type="button">Copy token</button></div>
+        <div class="card-b"><dl class="kv" id="claims"></dl>
+          <details style="margin-top:16px"><summary class="muted" style="cursor:pointer">Raw token</summary><pre class="code" id="raw"></pre></details>
+        </div>
+      </section>
+    </main>
+  </div>
+</div>
+<script type="module">
+import { mount } from './shell.mjs';
+import { h, $, amount, short, ext, when, workflowLabel } from './ui.mjs';
+import { decode, verifyRs256, audience } from './token.mjs';
+import { ago } from './model.mjs';
+
+const { cfg, chain, data } = mount('proof', 'Proof');
+const d = await data;
+const { tok, model, names, gas, calls } = d;
+const params = new URLSearchParams(location.search);
+const chosen = params.get('award');
+const award = model.awards.find((a) => a.key === chosen) ?? model.awards.find((a) => a.status === 'Paid') ?? model.awards[0];
+if (!award) {
+  $('title').textContent = 'No payouts to prove yet.';
+  throw new Error('no awards');
+}
+const pool = model.pools.find((p) => p.id === award.pool);
+const repo = names.repos[pool?.terms?.repo_id] ?? null;
+const jwt = calls[award.awardTx]?.jwt ?? null;
+const token = decode(jwt);
+const claims = token?.claims ?? {};
+const aud = audience(claims);
+const login = names.users[award.githubId] ?? `GitHub user ${award.githubId}`;
+
+// picker
+$('pick').replaceChildren(...model.awards.map((a) => h('option', { value: a.key, selected: a.key === award.key ? true : null },
+  `${names.repos[model.pools.find((p) => p.id === a.pool)?.terms?.repo_id]?.split('/')[1] ?? `pool ${a.pool}`} #${a.pr} · ${a.status}`)));
+$('pick').addEventListener('change', (e) => { params.set('award', e.target.value); location.search = params.toString(); });
+
+$('eyebrow').textContent = `Proof · pool ${award.pool} · PR #${award.pr}`;
+const verb = { Paid: `was paid ${amount(award.amount, tok).textContent}`, Pending: `is waiting for its author`, Refunded: 'went back to the pool' }[award.status];
+$('title').textContent = `PR #${award.pr} ${verb}.`;
+
+// what the contract checked, re-derived from the token and the pool's terms
+const terms = pool?.terms ?? {};
+const awardSecs = Number(BigInt(award.awardTs) / 1_000_000_000n);
+const checks = [
+  [claims.iss === 'https://token.actions.githubusercontent.com', 'Issued by GitHub Actions', claims.iss],
+  [String(claims.repository_id) === String(terms.repo_id), "From the pool's repository", `${claims.repository} (id ${claims.repository_id})`],
+  [claims.job_workflow_ref === terms.workflow, 'By the workflow the pool pinned', claims.job_workflow_ref],
+  [claims.event_name === 'pull_request_target', 'Triggered by a merged pull request', claims.event_name],
+  [aud.contract === cfg.contract && aud.kind === 'award' && aud.pool === award.pool && aud.pr === award.pr, 'Addressed to this contract, pool and PR', `${aud.contract} · pool ${aud.pool} · PR ${aud.pr}`],
+  [BigInt(aud.amount ?? 0) === BigInt(award.amount) && BigInt(award.amount) <= BigInt(terms.cap ?? 0), "Amount within the pool's cap", `${amount(award.amount, tok).textContent} of a ${amount(terms.cap ?? '0', tok).textContent} cap`],
+  [claims.exp > awardSecs, 'Still valid when the contract checked it', `expired ${new Date(claims.exp * 1000).toUTCString().slice(17, 25)} UTC, checked ${new Date(awardSecs * 1000).toUTCString().slice(17, 25)} UTC`],
+  [true, 'First award for this pull request', 'the contract refuses a second award for the same PR'],
+];
+if (!token) {
+  $('checks').replaceChildren(h('li', { class: 'no' }, h('div', {}, 'The award transaction did not carry a readable token.')));
+} else {
+  $('checks').replaceChildren(...checks.map(([ok, label, detail]) => h('li', { class: ok ? null : 'no' }, h('div', {}, label, h('br'), h('span', { class: 'mono' }, detail)))));
+  $('checks-n').textContent = `${checks.filter(([ok]) => ok).length} of ${checks.length} pass`;
+}
+
+// timeline
+const item = (n, title, ...body) => h('div', { class: 'tl' }, h('div', { class: 'n' }, n), h('div', {}, h('h3', {}, title), h('div', { class: 'body' }, ...body)));
+const steps = [
+  item('01', 'Merged with a pay label', repo ? ext(`https://github.com/${repo}/pull/${award.pr}`, `${repo} #${award.pr}`) : `PR #${award.pr}`,
+    names.labels[award.key] ? ` · ${names.labels[award.key]}` : '', claims.actor ? ` · merged by ${claims.actor}` : ''),
+  item('02', 'Award workflow ran', claims.run_id && repo ? ext(`https://github.com/${repo}/actions/runs/${claims.run_id}`, `Run ${claims.run_id}`) : '—',
+    h('div', { class: 'mono', style: 'margin-top:4px', title: claims.job_workflow_ref }, workflowLabel(claims.job_workflow_ref))),
+  item('03', 'GitHub signed the token', `Key ${short(token?.header.kid ?? '', 8, 4)} · issued ${claims.iat ? new Date(claims.iat * 1000).toUTCString().slice(5, 25) : '—'} · valid 5 minutes`),
+  item('04', 'Contract verified and awarded', ext(cfg.txUrl(award.awardTx), short(award.awardTx, 10, 6)), ` · ${(gas[award.awardTx] / 1e12).toFixed(1)} TGas · ${when(award.awardTs)}`),
+  award.status === 'Paid'
+    ? item('05', 'Paid to the linked account', ext(cfg.txUrl(award.payoutTx), short(award.payoutTx, 10, 6)), ` · ${amount(award.amount, tok).textContent} → `,
+      ext(cfg.accountUrl(award.account), award.account), ` · ${ago(award.payoutTs)}`)
+    : award.status === 'Refunded'
+      ? item('05', 'Returned to the pool', ext(cfg.txUrl(award.refundTx), short(award.refundTx, 10, 6)), ' · no account was linked within 180 days')
+      : item('05', 'Waiting for the author', `${login} has not linked a NEAR account yet. The award is paid the moment they do.`),
+];
+$('timeline').replaceChildren(...steps);
+
+// claims
+const rows = [['repository', claims.repository], ['actor', claims.actor], ['event_name', claims.event_name], ['job_workflow_ref', claims.job_workflow_ref],
+  ['run_id', claims.run_id], ['aud', claims.aud], ['iss', claims.iss], ['kid (header)', token?.header.kid]];
+$('claims').replaceChildren(...rows.flatMap(([k, v]) => [h('dt', {}, k), h('dd', { class: 'mono' }, v ?? '—')]));
+$('raw').textContent = jwt ?? 'Not available';
+$('copy').addEventListener('click', async () => { await navigator.clipboard.writeText(jwt ?? ''); $('copy').textContent = 'Copied'; });
+
+// signature
+$('verify').disabled = !token;
+$('verify').addEventListener('click', async () => {
+  $('verify').disabled = true;
+  $('verify').textContent = 'Checking…';
+  try {
+    const key = await chain.view(cfg.contract, 'get_key', { kid: token.header.kid });
+    if (!key) throw new Error(`The contract no longer holds key ${token.header.kid}. It may have been revoked since.`);
+    const ok = await verifyRs256(jwt, key.n);
+    const since = new Date(key.active_at * 1000).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
+    $('verdict').replaceChildren(h('div', { class: `verdict ${ok ? 'ok' : 'bad'}` }, h('div', {},
+      h('b', {}, ok ? 'Valid signature from GitHub.' : 'The signature does not match.'),
+      h('p', {}, ok ? `Checked against key ${short(token.header.kid, 8, 4)}, the key this contract holds (active since ${since}). The token was not altered after GitHub signed it.`
+        : 'This token was not signed by the key the contract holds.'))));
+    $('verify').textContent = ok ? 'Verified' : 'Verify again';
+    if (!ok) $('verify').disabled = false;
+  } catch (err) {
+    $('verdict').replaceChildren(h('div', { class: 'verdict bad' }, h('div', {}, h('b', {}, 'Could not check the signature.'), h('p', {}, err.message))));
+    $('verify').textContent = 'Try again';
+    $('verify').disabled = false;
+  }
+});
+if (params.get('verify') === '1') $('verify').click();
+</script>
+</body>
+</html>

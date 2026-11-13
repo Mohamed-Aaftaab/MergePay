@@ -1,0 +1,138 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Overview · MergePay</title>
+<meta name="description" content="MergePay console: every payout for merged pull requests, read live from the NEAR contract.">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%2307060b'/%3E%3Ctext x='16' y='22' font-family='Arial' font-size='15' font-weight='700' text-anchor='middle' fill='%23c6b6ff'%3E//%3C/text%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:opsz,wght@14..32,300..600&family=JetBrains+Mono:wght@400;600&family=Poppins:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="site.css">
+<link rel="stylesheet" href="console.css">
+</head>
+<body class="console">
+<div class="app">
+  <aside class="side" id="side"></aside>
+  <div class="main">
+    <header class="topbar" id="topbar"></header>
+    <main class="page" id="page">
+      <div class="page-head">
+        <div>
+          <p class="eyebrow" id="eyebrow">Overview</p>
+          <h1>Every merge. Paid and provable.</h1>
+          <p>Read live from the contract on each visit. Every figure links to the transaction behind it.</p>
+        </div>
+        <a class="btn primary" id="verify-latest" href="proof.html">Re-verify the latest payout</a>
+      </div>
+
+      <section class="grid stats" aria-label="Totals">
+        <div class="card stat"><div class="k">Paid out <span id="i-paid"></span></div><div class="v" id="s-paid"><span class="sk"></span></div><div class="s" id="s-paid-n">&nbsp;</div></div>
+        <div class="card stat"><div class="k">Awaiting payout <span id="i-pending"></span></div><div class="v" id="s-pending"><span class="sk"></span></div><div class="s" id="s-pending-n">&nbsp;</div></div>
+        <div class="card stat"><div class="k">Unspent in pools <span id="i-pools"></span></div><div class="v" id="s-pools"><span class="sk"></span></div><div class="s" id="s-pools-n">&nbsp;</div></div>
+        <div class="card stat"><div class="k">Contributors <span id="i-people"></span></div><div class="v" id="s-people"><span class="sk"></span></div><div class="s" id="s-people-n">&nbsp;</div></div>
+      </section>
+
+      <section class="card" style="margin-bottom:18px" aria-labelledby="pipe-h">
+        <div class="card-h"><h2 id="pipe-h">How the latest payout was proven</h2><span class="faint mono" id="pipe-when"></span></div>
+        <div class="card-b"><div class="pipeline" id="pipeline"></div></div>
+      </section>
+
+      <div class="grid two">
+        <section class="card" aria-labelledby="latest-h">
+          <div class="card-h"><h2 id="latest-h">Latest payouts</h2><a class="more" href="payouts.html">All payouts →</a></div>
+          <div class="table-wrap"><table class="t">
+            <thead><tr><th>Pull request</th><th>Contributor</th><th class="num">Amount</th><th>Status</th><th>When</th></tr></thead>
+            <tbody id="latest"><tr><td colspan="5"><span class="sk" style="width:60%"></span></td></tr></tbody>
+          </table></div>
+        </section>
+        <section class="card" aria-labelledby="pools-h">
+          <div class="card-h"><h2 id="pools-h">Pools</h2><a class="more" href="pools.html">Manage →</a></div>
+          <div class="card-b grid" id="pools"><span class="sk" style="width:80%"></span></div>
+        </section>
+      </div>
+    </main>
+  </div>
+</div>
+<script type="module">
+import { mount } from './shell.mjs';
+import { h, $, amount, short, status, ext, avatar, icon } from './ui.mjs';
+import { ago } from './model.mjs';
+import { decode } from './token.mjs';
+
+const { cfg, data } = mount('overview', 'Overview');
+$('eyebrow').textContent = `Overview · ${cfg.contract}`;
+for (const [id, name] of [['i-paid', 'coin'], ['i-pending', 'clock'], ['i-pools', 'pools'], ['i-people', 'users']]) $(id).append(icon(name));
+
+const d = await data;
+const { tok, model, names, live, gas, calls } = d;
+const { totals, awards, pools, contributors } = model;
+const login = (id) => names.users[id] ?? `GitHub user ${id}`;
+const repoOf = (poolId) => names.repos[pools.find((p) => p.id === poolId)?.terms?.repo_id] ?? null;
+const proofHref = (a) => `proof.html?award=${a.pool}:${a.pr}${cfg.pools.length && location.search.includes('pools') ? `&pools=${cfg.pools}` : ''}`;
+
+// totals
+const unspent = Object.values(live).reduce((s, p) => s + BigInt(p?.balance ?? 0), 0n).toString();
+const refunded = awards.filter((a) => a.status === 'Refunded').length;
+$('s-paid').replaceChildren(amount(totals.paid, tok));
+$('s-paid-n').textContent = `${totals.paidCount} pull request${totals.paidCount === 1 ? '' : 's'} paid`;
+$('s-pending').replaceChildren(amount(totals.pending, tok));
+$('s-pending-n').textContent = `${totals.awards - totals.paidCount - refunded} waiting for a linked account`;
+$('s-pools').replaceChildren(amount(unspent, tok));
+$('s-pools-n').textContent = `${pools.length} pool${pools.length === 1 ? '' : 's'} · funded ${amount(totals.funded, tok).textContent}`;
+$('s-people').textContent = totals.contributors;
+$('s-people-n').textContent = `${contributors.filter((c) => c.link).length} linked to a NEAR account`;
+
+// pipeline, from the most recent paid award
+const latest = awards.find((a) => a.status === 'Paid') ?? awards[0];
+if (!latest) {
+  $('pipeline').replaceChildren(h('p', { class: 'muted' }, 'No payouts yet. The first merged pull request with a pay label will appear here.'));
+  $('verify-latest').remove();
+} else {
+  const token = decode(calls[latest.awardTx]?.jwt);
+  const claims = token?.claims ?? {};
+  const repo = repoOf(latest.pool) ?? claims.repository;
+  const label = names.labels[latest.key];
+  $('verify-latest').href = proofHref(latest);
+  $('pipe-when').textContent = ago(latest.payoutTs ?? latest.awardTs);
+  const step = (ico, title, text, fact, done = true) => h('div', { class: `step${done ? ' done' : ''}` },
+    h('div', { class: 'ico' }, icon(ico)), h('h3', {}, title), h('p', {}, text), fact);
+  $('pipeline').replaceChildren(
+    step('merge', 'Merged with a pay label', 'The pull request was merged in the pool\'s repository.',
+      repo ? ext(`https://github.com/${repo}/pull/${latest.pr}`, `PR #${latest.pr}${label ? ` · ${label}` : ''}`, 'fact link') : h('span', { class: 'fact' }, `PR #${latest.pr}`)),
+    step('key', 'GitHub signed a token', 'It names the pull request, its author and the amount, signed with GitHub\'s RS256 key.',
+      claims.run_id && repo ? ext(`https://github.com/${repo}/actions/runs/${claims.run_id}`, `run ${claims.run_id} · key ${short(token.header.kid, 6, 4)}`, 'fact link') : h('span', { class: 'fact' }, '—')),
+    step('check', 'The contract checked it', 'Signature, issuer, repository, pinned workflow, cap and pool balance, all on-chain.',
+      ext(cfg.txUrl(latest.awardTx), `${(gas[latest.awardTx] / 1e12).toFixed(1)} TGas · ${short(latest.awardTx, 6, 4)}`, 'fact link')),
+    step('coin', latest.status === 'Paid' ? 'The author was paid' : 'Waiting for the author', latest.status === 'Paid'
+      ? 'Tokens went to the NEAR account the author linked with their own GitHub-signed token.'
+      : 'The award is held until the author links a NEAR account.',
+      latest.payoutTx ? ext(cfg.txUrl(latest.payoutTx), `${amount(latest.amount, tok).textContent} → ${short(latest.account, 10, 8)}`, 'fact link') : h('span', { class: 'fact' }, amount(latest.amount, tok)),
+      latest.status === 'Paid'),
+  );
+}
+
+// latest payouts
+$('latest').replaceChildren(...(awards.length ? awards.slice(0, 6).map((a) => h('tr', { class: 'click', onclick: () => { location.href = proofHref(a); } },
+  h('td', {}, h('a', { class: 'link', href: proofHref(a) }, `${repoOf(a.pool)?.split('/')[1] ?? `pool ${a.pool}`} #${a.pr}`)),
+  h('td', {}, h('div', { class: 'who' }, avatar(a.githubId), login(a.githubId))),
+  h('td', { class: 'num' }, amount(a.amount, tok)),
+  h('td', {}, status(a.status)),
+  h('td', { class: 'faint' }, ago(a.payoutTs ?? a.awardTs)),
+)) : [h('tr', {}, h('td', { colspan: 5, class: 'empty' }, 'No awards yet.'))]));
+
+// pools
+$('pools').replaceChildren(...(pools.length ? pools.map((p) => {
+  const balance = BigInt(live[p.id]?.balance ?? 0);
+  const funded = BigInt(p.funded);
+  const used = funded > 0n ? Number(((funded - balance) * 1000n) / funded) / 10 : 0;
+  return h('a', { href: 'pools.html', style: 'text-decoration:none;color:inherit;display:block' },
+    h('div', { style: 'display:flex;justify-content:space-between;gap:12px;margin-bottom:8px' },
+      h('b', { style: 'font-weight:600' }, `Pool ${p.id}`), h('span', { class: 'faint mono' }, names.repos[p.terms?.repo_id] ?? `repo ${p.terms?.repo_id}`)),
+    h('div', { class: 'bar' }, h('i', { class: 'a', style: `width:${used}%` }), h('i', { class: 'u', style: `width:${100 - used}%` })),
+    h('div', { class: 'legend' }, h('span', { style: '--c:var(--lilac)' }, `${p.awards} awarded`), h('span', { style: '--c:rgb(123 224 174 / 0.75)' }, `${amount(balance.toString(), tok).textContent} unspent`)));
+}) : [h('p', { class: 'muted' }, 'No pools funded yet.')]));
+</script>
+</body>
+</html>

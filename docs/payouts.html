@@ -1,0 +1,96 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Payouts · MergePay</title>
+<meta name="description" content="Every award MergePay made for a merged pull request, with its status and transactions.">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%2307060b'/%3E%3Ctext x='16' y='22' font-family='Arial' font-size='15' font-weight='700' text-anchor='middle' fill='%23c6b6ff'%3E//%3C/text%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:opsz,wght@14..32,300..600&family=JetBrains+Mono:wght@400;600&family=Poppins:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="site.css">
+<link rel="stylesheet" href="console.css">
+</head>
+<body class="console">
+<div class="app">
+  <aside class="side" id="side"></aside>
+  <div class="main">
+    <header class="topbar" id="topbar"></header>
+    <main class="page" id="page">
+      <div class="page-head">
+        <div>
+          <p class="eyebrow">Payouts</p>
+          <h1>Every award, from merge to payout.</h1>
+          <p>One row per merged pull request the contract awarded. Open a row to see the token GitHub signed and re-check it.</p>
+        </div>
+        <a class="btn" href="statement.html">Bookkeeper statement and CSV</a>
+      </div>
+      <section class="card">
+        <div class="toolbar">
+          <div class="chips" id="chips" role="group" aria-label="Filter by status"></div>
+          <label class="field" style="width:min(340px,100%)"><span id="search-ico"></span><input id="q" type="search" placeholder="PR, GitHub user or NEAR account" aria-label="Search payouts"></label>
+        </div>
+        <div class="table-wrap"><table class="t">
+          <thead><tr><th>Pull request</th><th>Contributor</th><th>Payout account</th><th class="num">Amount</th><th>Status</th><th>Awarded</th><th>Transactions</th><th></th></tr></thead>
+          <tbody id="rows"><tr><td colspan="8"><span class="sk" style="width:60%"></span></td></tr></tbody>
+        </table></div>
+      </section>
+    </main>
+  </div>
+</div>
+<script type="module">
+import { mount } from './shell.mjs';
+import { h, $, amount, short, status, ext, avatar, icon, when } from './ui.mjs';
+import { ago } from './model.mjs';
+
+const { cfg, data } = mount('payouts', 'Payouts');
+$('search-ico').append(icon('search'));
+const d = await data;
+const { tok, model, names } = d;
+const params = new URLSearchParams(location.search);
+let filter = params.get('status') ?? 'All';
+const repoOf = (a) => names.repos[model.pools.find((p) => p.id === a.pool)?.terms?.repo_id] ?? null;
+const login = (a) => names.users[a.githubId] ?? `user ${a.githubId}`;
+const linkOf = (a) => a.account ?? model.contributors.find((c) => c.githubId === a.githubId)?.link?.account ?? null;
+$('q').value = params.get('q') ?? '';
+
+function chips() {
+  const counts = { All: model.awards.length };
+  for (const a of model.awards) counts[a.status] = (counts[a.status] ?? 0) + 1;
+  $('chips').replaceChildren(...['All', 'Paid', 'Pending', 'Refunded'].map((s) => h('button', { class: 'chip', type: 'button', 'aria-pressed': String(s === filter),
+    onclick: () => { filter = s; render(); } }, s, h('span', { class: 'n' }, counts[s] ?? 0))));
+}
+
+function render() {
+  chips();
+  const q = $('q').value.trim().toLowerCase().replace(/^#/, '');
+  const url = new URL(location.href);
+  filter === 'All' ? url.searchParams.delete('status') : url.searchParams.set('status', filter);
+  q ? url.searchParams.set('q', q) : url.searchParams.delete('q');
+  history.replaceState(null, '', url);
+  const shown = model.awards.filter((a) => (filter === 'All' || a.status === filter)
+    && (!q || [String(a.pr), login(a), linkOf(a) ?? '', repoOf(a) ?? ''].some((v) => v.toLowerCase().includes(q))));
+  const proof = (a) => `proof.html?award=${a.key}`;
+  $('rows').replaceChildren(...(shown.length ? shown.map((a) => {
+    const repo = repoOf(a);
+    const account = linkOf(a);
+    return h('tr', {},
+      h('td', {}, repo ? ext(`https://github.com/${repo}/pull/${a.pr}`, `${repo.split('/')[1]} #${a.pr}`) : `pool ${a.pool} · #${a.pr}`,
+        names.labels[a.key] ? h('div', { class: 'faint mono' }, names.labels[a.key]) : ''),
+      h('td', {}, h('div', { class: 'who' }, avatar(a.githubId), ext(`https://github.com/${login(a)}`, login(a)))),
+      h('td', {}, account ? ext(cfg.accountUrl(account), short(account, 12, 8), 'link mono') : h('span', { class: 'faint' }, 'Not linked yet')),
+      h('td', { class: 'num' }, amount(a.amount, tok)),
+      h('td', {}, status(a.status)),
+      h('td', { title: when(a.awardTs) }, ago(a.awardTs)),
+      h('td', { class: 'mono' }, ext(cfg.txUrl(a.awardTx), 'award', 'link'), a.payoutTx ? [' · ', ext(cfg.txUrl(a.payoutTx), 'payout', 'link')] : '',
+        a.refundTx ? [' · ', ext(cfg.txUrl(a.refundTx), 'refund', 'link')] : ''),
+      h('td', {}, h('a', { class: 'btn', href: proof(a) }, 'Proof →')),
+    );
+  }) : [h('tr', {}, h('td', { colspan: 8, class: 'empty' }, model.awards.length ? 'No payouts match.' : 'No awards yet. Merge a pull request with a pay label to create the first.'))]));
+}
+$('q').addEventListener('input', render);
+render();
+</script>
+</body>
+</html>

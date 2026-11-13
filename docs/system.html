@@ -1,0 +1,137 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>System · MergePay</title>
+<meta name="description" content="What the MergePay console is connected to, and whether the contract still trusts the keys GitHub signs with.">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%2307060b'/%3E%3Ctext x='16' y='22' font-family='Arial' font-size='15' font-weight='700' text-anchor='middle' fill='%23c6b6ff'%3E//%3C/text%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:opsz,wght@14..32,300..600&family=JetBrains+Mono:wght@400;600&family=Poppins:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="site.css">
+<link rel="stylesheet" href="console.css">
+</head>
+<body class="console">
+<div class="app">
+  <aside class="side" id="side"></aside>
+  <div class="main">
+    <header class="topbar" id="topbar"></header>
+    <main class="page" id="page">
+      <div class="page-head">
+        <div>
+          <p class="eyebrow">System</p>
+          <h1>What this runs on.</h1>
+          <p>The contract, the keys it trusts, the workflows that feed it, and the public services this console reads from.</p>
+        </div>
+      </div>
+      <div class="grid two">
+        <section class="card" aria-labelledby="c-h">
+          <div class="card-h"><h2 id="c-h">Contract</h2><span id="c-state"></span></div>
+          <div class="card-b"><dl class="kv" id="contract"><dt>Account</dt><dd><span class="sk"></span></dd></dl></div>
+        </section>
+        <section class="card" aria-labelledby="s-h">
+          <div class="card-h"><h2 id="s-h">Services</h2></div>
+          <div class="card-b"><ul class="checks" id="services"><li><span class="sk" style="width:60%"></span></li></ul></div>
+        </section>
+      </div>
+      <section class="card" style="margin-top:16px" aria-labelledby="k-h">
+        <div class="card-h"><h2 id="k-h">GitHub signing keys</h2><span id="k-change" class="faint mono"></span></div>
+        <div class="table-wrap"><table class="t">
+          <thead><tr><th>Key id</th><th>In the contract</th><th>Active since</th><th>Tokens seen</th><th>Last used</th></tr></thead>
+          <tbody id="keys"><tr><td colspan="5"><span class="sk" style="width:60%"></span></td></tr></tbody>
+        </table></div>
+        <div class="card-b" style="border-top:1px solid var(--hair)" id="keycheck"></div>
+      </section>
+      <section class="card" style="margin-top:16px" aria-labelledby="w-h">
+        <div class="card-h"><h2 id="w-h">Workflows</h2></div>
+        <div class="table-wrap"><table class="t">
+          <thead><tr><th>Workflow</th><th>What it does</th><th>Last run</th><th>Result</th></tr></thead>
+          <tbody id="workflows"><tr><td colspan="4"><span class="sk" style="width:60%"></span></td></tr></tbody>
+        </table></div>
+      </section>
+    </main>
+  </div>
+</div>
+<script type="module">
+import { mount } from './shell.mjs';
+import { h, $, short, ext, when } from './ui.mjs';
+import { decode } from './token.mjs';
+import { ago } from './model.mjs';
+
+const { cfg, chain, data, site } = mount('system', 'System');
+const d = await data;
+const { tok, calls, events } = d;
+
+// contract
+const [conf, account, keyChange] = await Promise.all([
+  chain.view(cfg.contract, 'get_config'),
+  chain.rpc('query', { request_type: 'view_account', finality: 'final', account_id: cfg.contract }),
+  chain.view(cfg.contract, 'get_key_change_until'),
+]);
+$('c-state').replaceChildren(h('span', { class: 'pill-s s-Paid' }, 'Deployed'));
+const kv = [['Account', ext(cfg.accountUrl(cfg.contract), cfg.contract, 'link mono')], ['Network', `NEAR ${cfg.network}`],
+  ['Owner', ext(cfg.accountUrl(conf.owner), conf.owner, 'link mono')], ['Payout token', h('span', {}, `${tok.symbol} · `, ext(cfg.accountUrl(tok.account), tok.account, 'link mono'), ` · ${tok.decimals} decimals`)],
+  ['Pools created', String(conf.next_pool)], ['Code hash', h('span', { class: 'mono' }, short(account.code_hash, 10, 10))],
+  ['Balance', `${(Number(BigInt(account.amount) / 10n ** 20n) / 10000).toFixed(4)} NEAR, for gas and token registrations`],
+  ['Source', ext(`https://github.com/${site.repo}/tree/main/src`, `${site.repo}/src`, 'link mono')]];
+$('contract').replaceChildren(...kv.flatMap(([k, v]) => [h('dt', {}, k), h('dd', {}, v)]));
+
+// keys GitHub signed the contract's tokens with
+const seen = new Map();
+for (const [tx, call] of Object.entries(calls)) {
+  const t = decode(call.jwt);
+  if (!t) continue;
+  const ts = events.find((e) => e.tx === tx)?.ts ?? '0';
+  const k = seen.get(t.header.kid) ?? { kid: t.header.kid, count: 0, lastTs: '0', lastTx: null };
+  k.count += 1;
+  if (BigInt(ts) > BigInt(k.lastTs)) Object.assign(k, { lastTs: ts, lastTx: tx });
+  seen.set(t.header.kid, k);
+}
+const keys = await Promise.all([...seen.values()].map(async (k) => ({ ...k, stored: await chain.view(cfg.contract, 'get_key', { kid: k.kid }) })));
+const nowS = Date.now() / 1000;
+$('keys').replaceChildren(...(keys.length ? keys.map((k) => h('tr', {},
+  h('td', { class: 'mono' }, k.kid),
+  h('td', {}, k.stored ? h('span', { class: `pill-s ${k.stored.active_at > nowS ? 's-Pending' : 's-Paid'}` }, k.stored.active_at > nowS ? 'Time-locked' : 'Trusted') : h('span', { class: 'pill-s s-Refunded' }, 'Revoked')),
+  h('td', {}, k.stored ? new Date(k.stored.active_at * 1000).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }) : '—'),
+  h('td', { class: 'num', style: 'text-align:left' }, k.count),
+  h('td', {}, k.lastTx ? ext(cfg.txUrl(k.lastTx), ago(k.lastTs), 'link') : '—'),
+)) : [h('tr', {}, h('td', { colspan: 5, class: 'empty' }, 'No tokens submitted yet.'))]));
+$('k-change').textContent = keyChange > nowS ? `Key change pending until ${new Date(keyChange * 1000).toUTCString()} · funders may refund early` : 'No key change pending';
+
+// workflows (GitHub's public API)
+const run = async (file) => (await chain.github(`/repos/${site.repo}/actions/workflows/${file}/runs?per_page=1&branch=main`))?.workflow_runs?.[0] ?? null;
+const [ci, award, keyRun, limit] = await Promise.all([run('ci.yml'), run('award.yml'), run('keys.yml'), fetch('https://api.github.com/rate_limit').then((r) => r.json()).catch(() => null)]);
+// GitHub allows 60 anonymous requests an hour per visitor; past that, say so rather than claim nothing ran
+const limited = limit?.resources?.core?.remaining === 0;
+const result = (r) => !r ? h('span', { class: 'faint' }, limited ? 'GitHub limit reached, retry later' : 'No run yet') : r.status !== 'completed' ? h('span', { class: 'pill-s s-Pending' }, 'Running')
+  : h('span', { class: `pill-s ${r.conclusion === 'success' ? 's-Paid' : 's-Refunded'}` }, r.conclusion === 'success' ? 'Passed' : r.conclusion);
+const wf = [
+  ['award.yml', 'On a merged PR with a pay label, gets a GitHub-signed token and submits it', award],
+  ['keys.yml', "Daily: every key GitHub signs with must be trusted by the contract", keyRun],
+  ['ci.yml', 'Contract tests, a WASM build and the site tests on every push', ci],
+];
+$('workflows').replaceChildren(...wf.map(([file, what, r]) => h('tr', {},
+  h('td', {}, ext(`https://github.com/${site.repo}/blob/main/.github/workflows/${file}`, file, 'link mono')),
+  h('td', { class: 'muted', style: 'white-space:normal' }, what),
+  h('td', {}, r ? ext(r.html_url, ago(String(BigInt(Date.parse(r.updated_at)) * 1_000_000n)), 'link') : '—'),
+  h('td', {}, result(r)))));
+$('keycheck').replaceChildren(h('div', { class: `verdict ${keyRun?.conclusion === 'success' ? 'ok' : ''}` }, h('div', {},
+  h('b', {}, keyRun ? (keyRun.conclusion === 'success' ? 'GitHub signs only with keys this contract trusts.' : 'The last key check did not pass.') : limited ? "Could not read the key check: GitHub's hourly limit for this browser is used up." : 'The daily key check has not run yet.'),
+  h('p', {}, 'A scheduled workflow compares GitHub\'s published keys with get_key on the contract every day, so a key rotation is caught before awards start failing.',
+    keyRun ? [' ', ext(keyRun.html_url, 'Latest check')] : ''))));
+
+// services
+const time = async (fn) => { const t = performance.now(); try { await fn(); return Math.round(performance.now() - t); } catch { return null; } };
+const rpcMs = await time(() => chain.rpc('status', []));
+const ghLimit = limit;
+const svc = [
+  [rpcMs !== null, 'NEAR RPC', rpcMs !== null ? `${cfg.rpcs[0].replace('https://', '')} answered in ${rpcMs} ms` : 'unreachable'],
+  [true, 'NearBlocks API', `listed ${Object.keys(d.gas).length} transactions for this contract`],
+  [Boolean(ghLimit) && !limited, 'GitHub API', ghLimit ? `${ghLimit.resources.core.remaining} of ${ghLimit.resources.core.limit} requests left this hour` : 'unreachable'],
+  [true, 'Explorer links', cfg.explorer.replace('https://', '')],
+];
+$('services').replaceChildren(...svc.map(([ok, name, detail]) => h('li', { class: ok ? null : 'no' }, h('div', {}, name, h('br'), h('span', { class: 'mono' }, detail)))));
+</script>
+</body>
+</html>

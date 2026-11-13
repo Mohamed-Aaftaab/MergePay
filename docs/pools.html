@@ -1,0 +1,123 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Pools · MergePay</title>
+<meta name="description" content="MergePay pools: the funds each repository pays merged pull requests from, with their terms and funders.">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%2307060b'/%3E%3Ctext x='16' y='22' font-family='Arial' font-size='15' font-weight='700' text-anchor='middle' fill='%23c6b6ff'%3E//%3C/text%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:opsz,wght@14..32,300..600&family=JetBrains+Mono:wght@400;600&family=Poppins:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="site.css">
+<link rel="stylesheet" href="console.css">
+</head>
+<body class="console">
+<div class="app">
+  <aside class="side" id="side"></aside>
+  <div class="main">
+    <header class="topbar" id="topbar"></header>
+    <main class="page" id="page">
+      <div class="page-head">
+        <div>
+          <p class="eyebrow">Pools</p>
+          <h1>Funds waiting for merged work.</h1>
+          <p>Each pool belongs to one repository and one pinned workflow. The contract pays awards from it, up to the cap, and nothing else can move it before expiry.</p>
+        </div>
+        <button class="btn primary" id="new-pool" type="button">Open a new pool</button>
+      </div>
+      <div class="grid" id="pools"><div class="card card-b"><span class="sk" style="width:60%"></span></div></div>
+    </main>
+  </div>
+</div>
+
+<dialog class="sheet" id="sheet" aria-labelledby="sheet-h">
+  <h2 id="sheet-h"></h2>
+  <p class="muted" id="sheet-p"></p>
+  <pre class="code" id="sheet-cmd"></pre>
+  <p class="faint" style="font-size:13px" id="sheet-note"></p>
+  <form method="dialog" style="display:flex;gap:10px;justify-content:flex-end"><button class="btn" id="sheet-copy" type="button">Copy command</button><button class="btn primary">Done</button></form>
+</dialog>
+
+<script type="module">
+import { mount } from './shell.mjs';
+import { h, $, amount, short, ext, when, workflowLabel } from './ui.mjs';
+
+const { cfg, chain, data } = mount('pools', 'Pools');
+const d = await data;
+const { tok, model, names, live } = d;
+// each funder's refund share comes from the contract, not from what they put in
+const shares = Object.fromEntries(await Promise.all(model.pools.flatMap((p) => Object.keys(p.funders).map(async (f) =>
+  [`${p.id}:${f}`, BigInt(await chain.view(cfg.contract, 'get_share', { pool_id: p.id, funder: f }))]))));
+const now = Date.now() / 1000;
+
+function sheet(title, text, cmd, note) {
+  $('sheet-h').textContent = title;
+  $('sheet-p').textContent = text;
+  $('sheet-cmd').textContent = cmd;
+  $('sheet-note').textContent = note;
+  $('sheet-copy').onclick = async () => { await navigator.clipboard.writeText(cmd); $('sheet-copy').textContent = 'Copied'; };
+  $('sheet-copy').textContent = 'Copy command';
+  $('sheet').showModal();
+}
+const fundCmd = (msg) => `near contract call-function as-transaction ${tok.account} ft_transfer_call \\
+  json-args '${JSON.stringify({ receiver_id: cfg.contract, amount: '<amount in base units>', msg })}' \\
+  prepaid-gas '100 Tgas' attached-deposit '1 yoctoNEAR' \\
+  sign-as <your account> network-config ${cfg.network} sign-with-keychain send`;
+
+$('new-pool').addEventListener('click', () => {
+  const sample = model.pools.at(-1)?.terms;
+  const terms = { repo_id: sample?.repo_id ?? '<numeric repository id>', workflow: sample?.workflow ?? '<owner>/<repo>/.github/workflows/award.yml@refs/heads/main',
+    cap: `<largest single award, in base units>`, expiry: Math.floor(now) + 30 * 86400 };
+  sheet('Open a new pool', `Send ${tok.symbol} to the contract with the pool terms as the message. The contract creates the pool and logs its id.`,
+    fundCmd(JSON.stringify(terms)), `Amounts are in base units: ${tok.symbol} has ${tok.decimals} decimals. The expiry above is 30 days from now. Then point the repository variable MERGEPAY_POOL_ID at the new pool.`);
+});
+
+$('pools').replaceChildren(...(model.pools.length ? model.pools.map((p) => {
+  const state = live[p.id];
+  const terms = p.terms ?? state?.terms ?? {};
+  const balance = BigInt(state?.balance ?? 0);
+  const funded = BigInt(p.funded);
+  const awarded = BigInt(p.awarded);
+  const refunded = BigInt(p.refunded);
+  const pct = (x) => (funded > 0n ? Number((x * 1000n) / funded) / 10 : 0);
+  const expired = terms.expiry <= now;
+  const days = Math.round((terms.expiry - now) / 86400);
+  const repo = names.repos[terms.repo_id];
+  const file = terms.workflow?.split('@')[0]?.split('/').slice(2).join('/');
+  const totalShares = BigInt(state?.shares ?? 0);
+  return h('section', { class: 'card', 'aria-label': `Pool ${p.id}` },
+    h('div', { class: 'card-h' },
+      h('div', { style: 'display:flex;align-items:center;gap:12px;flex-wrap:wrap' }, h('h2', {}, `Pool ${p.id}`),
+        repo ? ext(`https://github.com/${repo}`, repo, 'link mono') : h('span', { class: 'mono faint' }, `repository ${terms.repo_id}`),
+        h('span', { class: `pill-s ${expired ? 's-Refunded' : 's-Paid'}` }, expired ? 'Expired: funders can refund' : 'Active')),
+      h('button', { class: 'btn', type: 'button', onclick: () => sheet(`Fund pool ${p.id}`, `Adds ${tok.symbol} to pool ${p.id}. Its terms stay as they are, and your share of whatever is unspent at expiry can be refunded to you.`,
+        fundCmd(String(p.id)), `${tok.symbol} has ${tok.decimals} decimals, so 1 ${tok.symbol} is 1${'0'.repeat(tok.decimals)} base units.`) }, `Fund pool ${p.id}`)),
+    h('div', { class: 'card-b grid pool-body' },
+      h('div', {},
+        h('div', { style: 'display:flex;justify-content:space-between;align-items:baseline;margin-bottom:10px' },
+          h('div', {}, h('div', { class: 'faint', style: 'font-size:12.5px' }, 'Unspent'), h('div', { style: 'font:300 30px var(--display);letter-spacing:-0.02em' }, amount(balance.toString(), tok))),
+          h('div', { class: 'faint', style: 'font-size:12.5px;text-align:right' }, `of ${amount(p.funded, tok).textContent} funded`)),
+        h('div', { class: 'bar' }, h('i', { class: 'a', style: `width:${pct(awarded)}%` }), h('i', { style: `width:${pct(refunded)}%;background:var(--refunded)` }), h('i', { class: 'u', style: `width:${pct(balance)}%` })),
+        h('div', { class: 'legend' },
+          h('span', { style: '--c:var(--lilac)' }, `${amount(p.awarded, tok).textContent} awarded to ${p.awards} PR${p.awards === 1 ? '' : 's'}`),
+          refunded > 0n ? h('span', { style: '--c:var(--refunded)' }, `${amount(p.refunded, tok).textContent} refunded`) : '',
+          h('span', { style: '--c:rgb(123 224 174 / 0.75)' }, 'unspent')),
+        h('h3', { style: 'font-size:13px;font-weight:600;margin:24px 0 10px' }, 'Funders'),
+        h('div', { class: 'table-wrap' }, h('table', { class: 't' }, h('thead', {}, h('tr', {}, h('th', {}, 'Account'), h('th', { class: 'num' }, 'Put in'), h('th', { class: 'num' }, 'Refund share'))),
+          h('tbody', {}, Object.entries(p.funders).map(([acct, amt]) => h('tr', {},
+            h('td', {}, ext(cfg.accountUrl(acct), short(acct, 16, 8), 'link mono')),
+            h('td', { class: 'num' }, amount(amt, tok)),
+            h('td', { class: 'num' }, totalShares > 0n ? `${(Number((shares[`${p.id}:${acct}`] * 10000n) / totalShares) / 100).toFixed(2)}%` : '—'))))))),
+      h('dl', { class: 'kv' },
+        h('dt', {}, 'Pinned workflow'), h('dd', {}, repo && file ? h('a', { href: `https://github.com/${repo}/blob/main/${file}`, class: 'link mono', target: '_blank', rel: 'noopener', title: terms.workflow }, workflowLabel(terms.workflow)) : h('span', { class: 'mono', title: terms.workflow }, workflowLabel(terms.workflow))),
+        h('dt', {}, 'Cap per award'), h('dd', {}, amount(terms.cap ?? '0', tok)),
+        h('dt', {}, 'Expires'), h('dd', {}, new Date(terms.expiry * 1000).toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' }),
+          h('span', { class: 'faint' }, expired ? ' · expired' : ` · in ${days} day${days === 1 ? '' : 's'}`)),
+        h('dt', {}, 'Funded in'), h('dd', {}, p.fundTxs.map((f, i) => [i ? ', ' : '', ext(cfg.txUrl(f.tx), short(f.tx, 6, 4), 'link mono')])),
+        h('dt', {}, 'Before expiry'), h('dd', { class: 'muted' }, 'Only awards can leave the pool, each one signed by GitHub and within the cap.'),
+        h('dt', {}, 'After expiry'), h('dd', { class: 'muted' }, 'Each funder can take back their share of what is unspent.'))));
+}) : [h('div', { class: 'card card-b empty' }, 'No pools yet. Open one to start paying for merged pull requests.')]));
+</script>
+</body>
+</html>
