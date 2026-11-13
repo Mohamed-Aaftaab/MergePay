@@ -1,0 +1,53 @@
+# Daily check that every key GitHub currently signs with is registered in the contract.
+# If GitHub rotates in a key the contract does not know, awards would start failing; this run fails first.
+name: GitHub key check
+on:
+  schedule:
+    - cron: "17 6 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  keys:
+    runs-on: ubuntu-latest
+    env:
+      CONTRACT: ${{ vars.MERGEPAY_CONTRACT }}
+      NETWORK: ${{ vars.MERGEPAY_NETWORK }}
+    steps:
+      - name: Compare GitHub's signing keys with the contract
+        run: |
+          set -euo pipefail
+          jwks=$(curl -sSf --retry 3 https://token.actions.githubusercontent.com/.well-known/jwks)
+          now=$(date +%s)
+          missing=0
+          {
+            echo "### GitHub signing keys vs \`$CONTRACT\`"
+            echo
+            echo "| Key id | GitHub | Contract |"
+            echo "| --- | --- | --- |"
+          } >> "$GITHUB_STEP_SUMMARY"
+          for row in $(echo "$jwks" | jq -c '.keys[] | select(.kty == "RSA") | {kid, n}'); do
+            kid=$(echo "$row" | jq -r .kid)
+            n=$(echo "$row" | jq -r .n)
+            args=$(jq -cn --arg kid "$kid" '{kid: $kid}' | base64 -w0)
+            stored=$(curl -sSf --retry 3 "https://rpc.$NETWORK.fastnear.com" -H 'Content-Type: application/json' \
+              -d "$(jq -cn --arg a "$CONTRACT" --arg b "$args" '{jsonrpc:"2.0",id:1,method:"query",params:{request_type:"call_function",finality:"final",account_id:$a,method_name:"get_key",args_base64:$b}}')" \
+              | jq -er '.result.result | implode')
+            if [ "$stored" = "null" ]; then
+              state="missing"; missing=1
+            elif [ "$(echo "$stored" | jq -r .n)" != "$n" ]; then
+              state="different modulus"; missing=1
+            elif [ "$(echo "$stored" | jq -r .active_at)" -gt "$now" ]; then
+              state="registered, time-locked"
+            else
+              state="registered"
+            fi
+            echo "| \`$kid\` | signing | $state |" >> "$GITHUB_STEP_SUMMARY"
+            echo "$kid: $state"
+          done
+          if [ "$missing" = 1 ]; then
+            echo "::error::GitHub signs with a key the contract does not trust. Propose it with propose_key before awards fail."
+            exit 1
+          fi

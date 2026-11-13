@@ -542,6 +542,15 @@ fn tc35_tc36_tc37_key_management() {
         c.propose_key("k2".into(), enc(&[0xff; 128]))
     });
     c.propose_key("k2".into(), modulus(other_key()));
+    assert_eq!(
+        c.get_key("k2".into()),
+        Some(KeyView {
+            n: modulus(other_key()),
+            active_at: T0 + KEY_TIMELOCK_SECS
+        })
+    );
+    assert_eq!(c.get_key("k1".into()).unwrap().active_at, T0);
+    assert_eq!(c.get_key("nope".into()), None);
 
     let token = |pr, time: u64| {
         let claims = with(award_claims(pr, 1_000_000), "exp", json!(time + 300));
@@ -557,6 +566,7 @@ fn tc35_tc36_tc37_key_management() {
 
     at("owner.near", T0 + KEY_TIMELOCK_SECS);
     c.revoke_key("k2".into());
+    assert_eq!(c.get_key("k2".into()), None);
     at("relayer.near", T0 + KEY_TIMELOCK_SECS);
     rejected(&mut c, "unknown signing key", |c| {
         c.award(token(2, T0 + KEY_TIMELOCK_SECS))
