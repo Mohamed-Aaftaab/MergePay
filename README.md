@@ -126,6 +126,8 @@ no wallet are involved. The landing page reads the same data for its live detail
   contract is hidden by default: it was a smoke test whose made-up GitHub ids belong to unrelated
   people.
 
+Hosting: Vercel deploys `docs/` as a static site on every push to `main` (project root directory set to `docs`, no build step); GitHub Pages serves the same folder as a mirror.
+
 To run it locally, serve the folder (ES modules do not load from `file://`):
 
 ```bash
