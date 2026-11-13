@@ -3,235 +3,111 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>MergePay Statement</title>
-<meta name="description" content="Payroll statement for MergePay on NEAR: every funding, award, payout and refund, read from the chain.">
+<title>Statement · MergePay</title>
+<meta name="description" content="Payroll statement for MergePay on NEAR: every funding, award, payout and refund, read from the chain, with a CSV for bookkeepers.">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%2307060b'/%3E%3Ctext x='16' y='22' font-family='Arial' font-size='15' font-weight='700' text-anchor='middle' fill='%23c6b6ff'%3E//%3C/text%3E%3C/svg%3E">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Inter:opsz,wght@14..32,300..600&family=Poppins:wght@400;500;600&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Inter:opsz,wght@14..32,300..600&family=JetBrains+Mono:wght@400;600&family=Poppins:wght@400;500;600&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="site.css">
-<style>
-  /* The globe still sits low and dim behind the data, so this page shares the hero's night. */
-  .backdrop { position: fixed; z-index: -1; left: 50%; bottom: 0; transform: translateX(-50%); width: max(100vw, calc(100vh * 1672 / 941));
-    aspect-ratio: 1672 / 941; opacity: 0.32; pointer-events: none;
-    -webkit-mask-image: linear-gradient(180deg, transparent 25%, #000 75%); mask-image: linear-gradient(180deg, transparent 25%, #000 75%); }
-  .backdrop img { width: 100%; height: 100%; display: block; }
-  main { max-width: 1100px; margin: 0 auto; padding: 24px 16px 72px; }
-  .title { display: flex; flex-wrap: wrap; gap: 16px; align-items: flex-end; justify-content: space-between; margin-bottom: 28px; }
-  .title .display { font-size: clamp(32px, 4.4vw, 52px); }
-  .sub { color: var(--muted); margin: 10px 0 0; overflow-wrap: anywhere; }
-  .controls { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
-  label.period { display: flex; gap: 8px; align-items: center; color: var(--muted); font-size: 14px; }
-  input[type="month"] { font: 500 14px var(--body); padding: 9px 14px; border-radius: 999px; border: 1px solid var(--glass-line); background: var(--glass); color: var(--ink); }
-  .tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 14px; margin-bottom: 20px; }
-  .tile { border-radius: 18px; padding: 16px 18px; }
-  .tile .k { color: var(--muted); font-size: 13px; }
-  .tile .v { font: 300 28px/1.2 var(--display); font-variation-settings: "opsz" 32; letter-spacing: -0.02em; font-variant-numeric: tabular-nums; margin-top: 4px; overflow-wrap: anywhere; }
-  .tile.lead .v { background: linear-gradient(90deg, #fff 40%, var(--lilac)); -webkit-background-clip: text; background-clip: text; color: transparent; }
-  .card { border-radius: 20px; overflow: hidden; }
-  .card-head { display: flex; flex-wrap: wrap; gap: 10px; justify-content: space-between; align-items: center; padding: 16px 18px; border-bottom: 1px solid var(--glass-line); }
-  .card-head h2 { font-size: 16px; font-weight: 600; margin: 0; }
-  .scroll { overflow-x: auto; }
-  table { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; font-size: 14px; }
-  th, td { text-align: left; padding: 12px 18px; border-bottom: 1px solid rgb(255 255 255 / 0.07); white-space: nowrap; }
-  th { font-size: 11px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--faint); font-weight: 600; }
-  td.num, th.num { text-align: right; }
-  tbody tr { transition: background 0.2s; }
-  tbody tr:hover { background: rgb(255 255 255 / 0.03); }
-  tbody tr:last-child td { border-bottom: 0; }
-  tfoot td { font-weight: 600; border-top: 1px solid var(--glass-line); border-bottom: 0; }
-  td a { color: var(--ink); text-decoration-color: rgb(255 255 255 / 0.3); text-underline-offset: 3px; }
-  td a:hover { text-decoration-color: var(--lilac); }
-  .badge { display: inline-block; padding: 3px 11px; border-radius: 999px; font-size: 12px; font-weight: 500; border: 1px solid currentColor; }
-  .Paid { color: var(--paid); background: rgb(123 224 174 / 0.1); }
-  .Pending { color: var(--pending); background: rgb(255 210 122 / 0.1); }
-  .Funded { color: var(--funded); background: rgb(159 182 255 / 0.1); }
-  .Refunded { color: var(--refunded); background: rgb(214 184 255 / 0.1); }
-  .empty, .status { padding: 32px 18px; color: var(--muted); text-align: center; }
-  .status.error { color: var(--error); }
-  .note { color: var(--muted); font-size: 13px; margin-top: 18px; text-shadow: 0 1px 8px rgb(0 0 0 / 0.9); }
-  dialog { border: 1px solid var(--glass-line); border-radius: 20px; background: #110f18; color: var(--ink); max-width: 640px; width: calc(100% - 32px); padding: 24px; }
-  dialog::backdrop { background: rgb(0 0 0 / 0.6); -webkit-backdrop-filter: blur(4px); backdrop-filter: blur(4px); }
-  dialog h2 { margin-top: 0; font: 300 26px/1.2 var(--display); letter-spacing: -0.02em; }
-  dialog p { color: var(--muted); }
-  pre { background: rgb(0 0 0 / 0.4); border: 1px solid var(--glass-line); border-radius: 12px; padding: 14px; overflow-x: auto; font-size: 13px; white-space: pre-wrap; word-break: break-all; color: var(--ink); }
-  code { color: var(--pink); }
-  .rise { animation: rise 0.8s var(--ease) both; }
-  @keyframes rise { from { opacity: 0; transform: translateY(14px); } to { opacity: 1; transform: none; } }
-  .d1 { animation-delay: 0.1s; } .d2 { animation-delay: 0.2s; } .d3 { animation-delay: 0.3s; }
-  @media (prefers-reduced-motion: reduce) { .rise { animation: none; } }
-</style>
+<link rel="stylesheet" href="console.css">
 </head>
-<body>
-<div class="backdrop" aria-hidden="true"><img src="https://d2ol7oe51mr4n9.cloudfront.net/user_38xzZboKViGWJOttwIXH07lWA1P/f1631235-0a76-464d-8f1d-2c4b48a997d5.jpg" alt="" width="1672" height="941"></div>
-<nav class="nav rise" aria-label="Main">
-  <a class="brand" href="./"><span class="brand-mark" aria-hidden="true">//</span>MergePay</a>
-  <ul class="nav-links">
-    <li><a href="./">Home</a></li>
-    <li><a href="statement.html" aria-current="page">Statement</a></li>
-    <li><a href="./#how">How it works</a></li>
-    <li><a data-repo-link="#for-the-bookkeeper" href="#">Bookkeeper guide</a></li>
-    <li><a data-contract-link href="#">Contract</a></li>
-  </ul>
-  <div class="nav-end">
-    <span class="chip-net"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c2.8 3 2.8 15 0 18M12 3c-2.8 3-2.8 15 0 18"/></svg>NEAR&nbsp;<span data-network></span></span>
-    <button class="pill pill-white" id="fund" type="button">Fund</button>
-    <a class="pill pill-outline" data-repo-link="" href="#">View code</a>
-  </div>
-</nav>
-<main>
-  <header class="title rise d1">
-    <div>
-      <h1 class="display"><span class="line">Payroll statement</span></h1>
-      <p class="sub">Contract <a id="contract-link" href="#"></a> on NEAR <span id="network"></span><span id="pool-note"></span>, read from its events on each visit.</p>
-    </div>
-    <div class="controls">
-      <label class="period">Period <input type="month" id="period" required></label>
-    </div>
-  </header>
-
-  <section class="tiles rise d2" aria-label="Totals for the period">
-    <div class="tile glass lead"><div class="k">Paid this period</div><div class="v" id="t-paid">–</div></div>
-    <div class="tile glass"><div class="k">Awaiting payout (all time)</div><div class="v" id="t-pending">–</div></div>
-    <div class="tile glass"><div class="k">Unspent in pools</div><div class="v" id="t-pools">–</div></div>
-    <div class="tile glass"><div class="k">Due date</div><div class="v" id="t-due">–</div></div>
-  </section>
-
-  <section class="card glass rise d3" aria-labelledby="lines-title">
-    <div class="card-head">
-      <h2 id="lines-title">Line items</h2>
-      <div class="controls">
-        <button class="pill pill-outline" id="csv-period" type="button" disabled>Download CSV (period)</button>
-        <button class="pill pill-outline" id="csv-all" type="button" disabled>Download CSV (all)</button>
+<body class="console">
+<div class="app">
+  <aside class="side" id="side"></aside>
+  <div class="main">
+    <header class="topbar" id="topbar"></header>
+    <main class="page" id="page">
+      <div class="page-head">
+        <div>
+          <p class="eyebrow">Statement</p>
+          <h1>Payroll statement</h1>
+          <p>One line per payment for the month you pick, read from the contract's events. The CSV is what a bookkeeper reconciles from.</p>
+        </div>
+        <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center">
+          <label class="field"><span class="faint" style="font-size:13px">Period</span><input type="month" id="period" required style="color-scheme:dark"></label>
+          <button class="btn" id="csv-period" type="button" disabled>Download CSV (period)</button>
+          <button class="btn" id="csv-all" type="button" disabled>Download CSV (all)</button>
+        </div>
       </div>
-    </div>
-    <div id="status" class="status" role="status" aria-live="polite">Loading…</div>
-    <div class="scroll"><table id="table" hidden>
-      <thead><tr>
-        <th>Date (UTC)</th><th>Pull request</th><th>Contributor</th><th>Label</th>
-        <th class="num">Rate</th><th class="num">Amount (<span class="symbol">USDC</span>)</th><th>Status</th><th>Transaction</th>
-      </tr></thead>
-      <tbody id="rows"></tbody>
-      <tfoot><tr><td colspan="5">Total paid in period</td><td class="num" id="foot-total"></td><td colspan="2"></td></tr></tfoot>
-    </table></div>
-  </section>
 
-  <p class="note" id="note">Amounts are in the token the contract pays out, as it reports itself.</p>
-</main>
+      <section class="grid stats" aria-label="Totals for the period">
+        <div class="card stat"><div class="k">Paid this period</div><div class="v" id="t-paid"><span class="sk"></span></div><div class="s">Paid rows only</div></div>
+        <div class="card stat"><div class="k">Awaiting payout</div><div class="v" id="t-pending"><span class="sk"></span></div><div class="s">All time</div></div>
+        <div class="card stat"><div class="k">Unspent in pools</div><div class="v" id="t-pools"><span class="sk"></span></div><div class="s">Live balance</div></div>
+        <div class="card stat"><div class="k">Due date</div><div class="v" id="t-due"><span class="sk"></span></div><div class="s" id="t-due-s">&nbsp;</div></div>
+      </section>
 
-<dialog id="fund-dialog" aria-labelledby="fund-title">
-  <h2 id="fund-title">Fund a pool</h2>
-  <p>Send <span class="symbol">USDC</span> to the contract with the pool id as the message. Paying from another chain or token through 1Click is not built yet.</p>
-  <pre id="fund-cmd"></pre>
-  <p class="note">To open a new pool for another repository, put the pool terms JSON in <code>msg</code> instead of the pool id. See the README.</p>
-  <form method="dialog"><button class="pill pill-white" type="submit">Close</button></form>
-</dialog>
-
+      <section class="card" aria-labelledby="lines-h">
+        <div class="card-h"><h2 id="lines-h">Line items</h2><span class="faint mono" id="lines-n"></span></div>
+        <div class="table-wrap"><table class="t">
+          <thead><tr><th>Date (UTC)</th><th>Pull request</th><th>Contributor or funder</th><th>Label</th><th class="num">Rate</th><th class="num">Amount (<span class="symbol">token</span>)</th><th>Status</th><th>Transaction</th></tr></thead>
+          <tbody id="rows"><tr><td colspan="8"><span class="sk" style="width:60%"></span></td></tr></tbody>
+          <tfoot><tr><td colspan="5" style="font-weight:600">Total paid in period</td><td class="num" style="font-weight:600" id="foot"></td><td colspan="2"></td></tr></tfoot>
+        </table></div>
+      </section>
+      <p class="faint" style="font-size:12.5px;margin-top:14px" id="note"></p>
+    </main>
+  </div>
+</div>
 <script type="module">
-import { SITE, settings } from './config.mjs';
-import { reader } from './chain.mjs';
+import { mount } from './shell.mjs';
+import { h, $, status, ext } from './ui.mjs';
 import { buildRows, statement, sumAmounts, toCsv, formatAmount } from './ledger.mjs';
 
-const cfg = settings();
-const $ = (id) => document.getElementById(id);
-const say = (text, isError = false) => { $('status').hidden = false; $('status').textContent = text; $('status').classList.toggle('error', isError); };
-const chain = reader(cfg, say);
-
-for (const a of document.querySelectorAll('[data-contract-link]')) a.href = cfg.accountUrl(cfg.contract);
-for (const a of document.querySelectorAll('[data-repo-link]')) a.href = `https://github.com/${SITE.repo}${a.dataset.repoLink}`;
-for (const el of document.querySelectorAll('[data-network]')) el.textContent = cfg.network;
-$('contract-link').textContent = cfg.contract;
-$('contract-link').href = cfg.accountUrl(cfg.contract);
-$('network').textContent = cfg.network;
-if (cfg.pools.length) $('pool-note').textContent = `, pool ${cfg.pools.join(', ')}`;
+const { cfg, data } = mount('statement', 'Statement');
 const params = new URLSearchParams(location.search);
 $('period').value = params.get('period') || new Date().toISOString().slice(0, 7);
 
-function cellLink(href, text) {
-  const td = document.createElement('td');
-  if (href) { const a = document.createElement('a'); a.href = href; a.textContent = text; a.rel = 'noopener'; a.target = '_blank'; td.append(a); }
-  else td.textContent = text;
-  return td;
-}
-function cell(text, cls) { const td = document.createElement('td'); td.textContent = text; if (cls) td.className = cls; return td; }
+const d = await data;
+const { tok, events, names, live } = d;
+const rows = buildRows(events, { explorer: cfg.txUrl(''), names, decimals: tok.decimals });
+for (const el of document.querySelectorAll('.symbol')) el.textContent = tok.symbol;
+const unspent = Object.values(live).reduce((s, p) => s + BigInt(p?.balance ?? 0), 0n);
+$('t-pools').textContent = `${formatAmount(unspent.toString(), tok.decimals).replace(/\.?0+$/, '')} ${tok.symbol}`;
+$('t-pending').textContent = `${sumAmounts(rows.filter((r) => r.status === 'Pending'), tok.decimals).replace(/\.?0+$/, '') || '0'} ${tok.symbol}`;
+$('note').textContent = `Amounts are in ${tok.symbol} (${tok.account}) with all ${tok.decimals} decimals, as the contract reports them; the CSV keeps every digit. `
+  + `The due date is ${cfg.dueDays} days after the period ends.` + (tok.symbol === 'USDC' ? '' : ' This deployment pays in a stand-in token, so these are not dollars.');
 
-function download(name, rows) {
-  const blob = new Blob(['﻿', toCsv(rows)], { type: 'text/csv;charset=utf-8' }); // BOM so Excel reads UTF-8
+function download(name, list) {
+  const blob = new Blob(['﻿', toCsv(list)], { type: 'text/csv;charset=utf-8' }); // BOM so Excel reads UTF-8
   const a = Object.assign(document.createElement('a'), { href: URL.createObjectURL(blob), download: name });
   a.click();
   setTimeout(() => URL.revokeObjectURL(a.href), 1000);
 }
 
-let rows = [];
-let pools = [];
-let tok = null;
-
 function render(period) {
   const { lines, totalPaid } = statement(rows, period, tok.decimals);
-  $('t-paid').textContent = totalPaid;
-  $('t-pending').textContent = sumAmounts(rows.filter((r) => r.status === 'Pending'), tok.decimals);
-  $('foot-total').textContent = totalPaid;
+  const trim = (v) => v.replace(/\.?0+$/, '') || '0';
+  $('t-paid').textContent = `${trim(totalPaid)} ${tok.symbol}`;
+  $('foot').textContent = trim(totalPaid);
   const [y, m] = period.split('-').map(Number);
-  $('t-due').textContent = new Date(Date.UTC(y, m, cfg.dueDays)).toISOString().slice(0, 10);
-
-  const body = $('rows');
-  body.replaceChildren();
-  for (const r of [...lines].reverse()) {
-    const tr = document.createElement('tr');
-    const status = document.createElement('td');
-    status.append(Object.assign(document.createElement('span'), { className: `badge ${r.status}`, textContent: r.status }));
-    const lastTx = r.explorer_url.split('/').pop();
-    tr.append(
-      cell(r.date_utc.replace('T', ' ').replace('Z', '')),
-      cellLink(r.pr_url, r.pr_number ? `${r.repo} #${r.pr_number}` : r.repo || '–'),
-      cellLink(r.contributor_github ? `https://github.com/${r.contributor_github}` : '', r.contributor_github || r.contributor_near_account || '–'),
-      cell(r.label || '–'),
-      cell(r.rate_usd || '–', 'num'),
-      cell(r.amount_usdc, 'num'),
-      status,
-      cellLink(r.explorer_url, `${lastTx.slice(0, 8)}…`),
-    );
-    body.append(tr);
-  }
-  $('table').hidden = lines.length === 0;
-  if (lines.length === 0) say('No payments in this period.'); else $('status').hidden = true;
+  const due = new Date(Date.UTC(y, m, cfg.dueDays));
+  $('t-due').textContent = due.toISOString().slice(0, 10);
+  $('t-due-s').textContent = `${cfg.dueDays} days after ${new Date(Date.UTC(y, m - 1, 1)).toLocaleDateString('en-GB', { month: 'long', year: 'numeric', timeZone: 'UTC' })}`;
+  $('lines-n').textContent = `${lines.length} line${lines.length === 1 ? '' : 's'}`;
+  $('rows').replaceChildren(...(lines.length ? [...lines].reverse().map((r) => h('tr', {},
+    h('td', { class: 'mono' }, r.date_utc.replace('T', ' ').replace('Z', '')),
+    h('td', {}, r.pr_url ? ext(r.pr_url, `${r.repo.split('/')[1]} #${r.pr_number}`) : h('span', { class: 'faint' }, r.repo || '—')),
+    h('td', {}, r.contributor_github ? ext(`https://github.com/${r.contributor_github}`, r.contributor_github) : h('span', { class: 'mono' }, r.contributor_near_account || '—')),
+    h('td', { class: 'mono' }, r.label || '—'),
+    h('td', { class: 'num mono' }, r.rate_usd || '—'),
+    h('td', { class: 'num mono', title: r.amount_usdc }, trim(r.amount_usdc)),
+    h('td', {}, status(r.status)),
+    h('td', {}, ext(r.explorer_url, r.explorer_url.split('/').pop().slice(0, 8) + '…', 'link mono')),
+  )) : [h('tr', {}, h('td', { colspan: 8, class: 'empty' }, 'No payments in this period.'))]));
   $('csv-period').onclick = () => download(`mergepay-${period}.csv`, lines);
   $('csv-all').onclick = () => download('mergepay-all.csv', rows);
   $('csv-period').disabled = $('csv-all').disabled = false;
 }
-
 $('period').addEventListener('change', () => {
-  if (!/^\d{4}-\d{2}$/.test($('period').value) || !tok) return;
+  if (!/^\d{4}-\d{2}$/.test($('period').value)) return;
   const url = new URL(location.href);
   url.searchParams.set('period', $('period').value);
   history.replaceState(null, '', url);
   render($('period').value);
 });
-$('fund').addEventListener('click', () => {
-  const pool = pools.at(-1) ?? 0;
-  $('fund-cmd').textContent = `near contract call-function as-transaction ${tok?.account ?? '<token contract>'} ft_transfer_call \\
-  json-args '{"receiver_id":"${cfg.contract}","amount":"<base units>","msg":"${pool}"}' \\
-  prepaid-gas '100 Tgas' attached-deposit '1 yoctoNEAR' \\
-  sign-as <your account> network-config ${cfg.network} sign-with-keychain send`;
-  $('fund-dialog').showModal();
-});
-
-try {
-  say('Reading the contract…');
-  tok = await chain.token();
-  for (const el of document.querySelectorAll('.symbol')) el.textContent = tok.symbol;
-  $('note').textContent = `Amounts are in ${tok.symbol} (${tok.account}), the token this contract pays out, with its ${tok.decimals} decimals. `
-    + `The due date is ${cfg.dueDays} days after the period ends.`
-    + (tok.symbol === 'USDC' ? '' : ' This deployment pays in a stand-in token, so the amounts are not dollars.');
-  const { events } = await chain.events();
-  pools = [...new Set(events.filter((e) => e.event === 'funded').map((e) => e.data.pool_id))].sort((a, b) => a - b);
-  say('Looking up GitHub names…');
-  rows = buildRows(events, { explorer: cfg.txUrl(''), names: await chain.names(events), decimals: tok.decimals });
-  render($('period').value);
-  $('t-pools').textContent = formatAmount(await chain.unspent(events), tok.decimals);
-} catch (err) {
-  const missing = /UNKNOWN_ACCOUNT|CodeDoesNotExist|MethodNotFound/.test(err.message);
-  say(missing ? `There is no MergePay contract at ${cfg.contract} on NEAR ${cfg.network}.` : `Could not load the statement: ${err.message}`, true);
-}
+render($('period').value);
 </script>
 </body>
 </html>

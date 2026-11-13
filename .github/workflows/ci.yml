@@ -27,5 +27,5 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-      - name: Ledger and CSV tests
-        run: node --test test/ledger.test.mjs
+      - name: Ledger, CSV, token and console model tests
+        run: node --test test/ledger.test.mjs test/console.test.mjs

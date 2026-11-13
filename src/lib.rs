@@ -59,6 +59,13 @@ pub struct Award {
     pub created: u64,
 }
 
+#[near(serializers = [json])]
+#[derive(Clone, Debug, PartialEq)]
+pub struct KeyView {
+    pub n: String,
+    pub active_at: u64,
+}
+
 #[near(serializers = [borsh, json])]
 #[derive(Clone, Debug)]
 pub struct Link {
@@ -513,6 +520,15 @@ impl MergePay {
 
     pub fn get_share(&self, pool_id: u64, funder: AccountId) -> U128 {
         U128(self.shares.get(&(pool_id, funder)).copied().unwrap_or(0))
+    }
+
+    /// The RSA modulus (base64url) the contract checks tokens with this key id against, and when it became active.
+    /// Lets anyone re-verify a stored token against exactly the key the contract used.
+    pub fn get_key(&self, kid: String) -> Option<KeyView> {
+        self.keys.get(&kid).map(|(n, active_at)| KeyView {
+            n: URL_SAFE_NO_PAD.encode(n),
+            active_at: *active_at,
+        })
     }
 
     pub fn get_key_change_until(&self) -> u64 {

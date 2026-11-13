@@ -1,5 +1,7 @@
 // Reads a MergePay contract's history from public NEAR services. Shared by every page.
 import { eventsFromOutcomes } from './ledger.mjs';
+import { buildModel } from './model.mjs';
+import { decode } from './token.mjs';
 
 const FINAL_AFTER_MS = 10 * 60 * 1000; // a transaction this old is final and fully indexed, so it is safe to cache
 const RETRY_MS = 12000;
@@ -72,33 +74,39 @@ export function reader(cfg, onStatus = () => {}) {
     return { txs, times };
   }
 
-  /** Every mergepay event, limited to the configured pools, plus the gas each transaction used. */
+  /** Every mergepay event, limited to the configured pools, plus each transaction's gas and the call it made. */
   async function events() {
     const { txs, times } = await receiptIndex();
     const out = [];
     const gas = {};
+    const calls = {}; // hash -> { method, signer, jwt } for calls made straight to the contract
     let done = 0;
     const work = [...txs];
     const worker = async () => {
       for (let item = work.shift(); item; item = work.shift()) {
         const [hash, ts] = item;
-        const key = `mergepay:${cfg.network}:tx3:${hash}`;
+        const key = `mergepay:${cfg.network}:tx4:${hash}`;
         let found = cache.get(key);
         if (!found) {
           const tx = await rpc('tx', { tx_hash: hash, sender_account_id: cfg.contract, wait_until: 'FINAL' });
           // whole-transaction gas, the figure explorers and the CLI report as "gas used"
           const burnt = tx.receipts_outcome.reduce((sum, r) => sum + r.outcome.gas_burnt, tx.transaction_outcome.outcome.gas_burnt);
-          found = { events: eventsFromOutcomes(tx.receipts_outcome, cfg.contract, hash, times, ts), gas: burnt };
+          const action = tx.transaction.receiver_id === cfg.contract ? tx.transaction.actions?.[0]?.FunctionCall : null;
+          let jwt = null;
+          try { jwt = action ? JSON.parse(atob(action.args)).jwt ?? null : null; } catch { /* not a token-carrying call */ }
+          found = { events: eventsFromOutcomes(tx.receipts_outcome, cfg.contract, hash, times, ts), gas: burnt,
+            call: action ? { method: action.method_name, signer: tx.transaction.signer_id, jwt } : null };
           if (Date.now() - Number(BigInt(ts) / 1_000_000n) > FINAL_AFTER_MS) cache.set(key, found);
         }
         out.push(...found.events);
         gas[hash] = found.gas;
+        if (found.call) calls[hash] = found.call;
         onStatus(`Reading transactions… ${++done} of ${txs.size}`);
       }
     };
     await Promise.all([worker(), worker(), worker(), worker()]); // a few at a time keeps public RPC happy
     const inPools = (e) => cfg.pools.length === 0 || !('pool_id' in e.data) || cfg.pools.includes(e.data.pool_id);
-    return { events: out.filter(inPools), gas };
+    return { events: out.filter(inPools), gas, calls };
   }
 
   async function github(path) {
@@ -147,5 +155,25 @@ export function reader(cfg, onStatus = () => {}) {
     return total;
   }
 
-  return { events, names, token, unspent, github };
+  /** Live state of each pool the events mention (balance, shares, terms). */
+  async function pools(evts) {
+    const ids = [...new Set(evts.filter((e) => e.event === 'funded').map((e) => e.data.pool_id))];
+    return Object.fromEntries(await Promise.all(ids.map(async (id) => [id, await view(cfg.contract, 'get_pool', { pool_id: id })])));
+  }
+
+  /** Everything a console page needs, in one call. */
+  async function load() {
+    onStatus('Reading the contract…');
+    const tok = await token();
+    const { events: evts, gas, calls } = await events();
+    const [live, nm] = await Promise.all([pools(evts), names(evts)]);
+    // The tokens on-chain name their repository, so names survive GitHub's anonymous rate limit
+    for (const call of Object.values(calls)) {
+      const c = decode(call.jwt)?.claims;
+      if (c?.repository_id && c.repository && !nm.repos[c.repository_id]) nm.repos[c.repository_id] = c.repository;
+    }
+    return { tok, events: evts, gas, calls, live, names: nm, model: buildModel(evts) };
+  }
+
+  return { events, names, token, unspent, github, view, rpc, pools, load };
 }

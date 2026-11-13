@@ -101,6 +101,24 @@ the contract and the rate card is in whole tokens. The next merge used it:
 The submitting key is a function-call key that can only call `award`, `link` and `pay` on this
 contract.
 
+## Console
+
+Live: **https://mergepay-near.vercel.app/console.html**. A static site that reads the contract on every
+visit; there is no backend and no demo data.
+
+| Page | What it shows |
+| --- | --- |
+| [Overview](https://mergepay-near.vercel.app/console.html) | Totals, and the four steps that proved the latest payout, each linked to its transaction or workflow run |
+| [Payouts](https://mergepay-near.vercel.app/payouts.html) | Every award with status filters and search |
+| [Proof](https://mergepay-near.vercel.app/proof.html) | For one payout: the GitHub token stored in the award transaction, the eight checks the contract made, and a button that re-verifies GitHub's RS256 signature in your browser against the key the contract holds (`get_key`) |
+| [Pools](https://mergepay-near.vercel.app/pools.html) | Balance, cap, expiry, pinned workflow and each funder's refund share |
+| [Contributors](https://mergepay-near.vercel.app/contributors.html) | Linked payout accounts, and a lookup by GitHub username |
+| [Statement](https://mergepay-near.vercel.app/statement.html?period=2026-11) | The bookkeeper view and CSV described below |
+| [System](https://mergepay-near.vercel.app/system.html) | Contract config, the signing keys its tokens used, workflow status and service health |
+
+A scheduled workflow, `keys.yml`, compares GitHub's published signing keys with the contract every day
+and fails if GitHub starts signing with a key the contract does not trust, before any award fails.
+
 ## Statement page and CSV
 
 Live: **https://mergepay-near.vercel.app/statement.html?period=2026-11** (also served from GitHub Pages)
@@ -187,7 +205,7 @@ You need Rust, [`cargo-near`](https://github.com/near/cargo-near), the
 | `refund(pool_id)` | funder | after expiry, or while a key change is pending |
 | `expire_award(pool_id, pr)` | anyone | after 180 days with no linked account |
 | `propose_key(kid, n)`, `revoke_key(kid)` | owner | 48 hour time-lock on new keys; revoke is immediate |
-| `get_config`, `get_pool`, `get_award`, `get_link`, `get_share` | anyone | read-only views |
+| `get_config`, `get_pool`, `get_award`, `get_link`, `get_share`, `get_key` | anyone | read-only views; `get_key(kid)` returns the modulus the contract checks that key id against |
 
 Signature check: RSASSA-PKCS1-v1_5 with SHA-256 per RFC 8017, in `src/rsa.rs`. The modular
 exponentiation comes from `num-bigint`; the hash is NEAR's `sha256` host function.

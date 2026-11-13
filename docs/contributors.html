@@ -1,0 +1,104 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Contributors · MergePay</title>
+<meta name="description" content="Contributors paid through MergePay and the NEAR account each one linked with a GitHub-signed token.">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%2307060b'/%3E%3Ctext x='16' y='22' font-family='Arial' font-size='15' font-weight='700' text-anchor='middle' fill='%23c6b6ff'%3E//%3C/text%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:opsz,wght@14..32,300..600&family=JetBrains+Mono:wght@400;600&family=Poppins:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="site.css">
+<link rel="stylesheet" href="console.css">
+</head>
+<body class="console">
+<div class="app">
+  <aside class="side" id="side"></aside>
+  <div class="main">
+    <header class="topbar" id="topbar"></header>
+    <main class="page" id="page">
+      <div class="page-head">
+        <div>
+          <p class="eyebrow">Contributors</p>
+          <h1>Who gets paid, and where.</h1>
+          <p>Each contributor tied their GitHub account to a NEAR account with a token GitHub signed for them. Only a newer token of their own can change it.</p>
+        </div>
+      </div>
+
+      <div class="grid two" style="margin-bottom:16px">
+        <section class="card" aria-labelledby="look-h">
+          <div class="card-h"><h2 id="look-h">Check a payout account</h2></div>
+          <div class="card-b grid">
+            <form id="look" style="display:flex;gap:10px;flex-wrap:wrap">
+              <label class="field" style="flex:1;min-width:200px"><span class="faint" style="font-size:13px">github.com/</span><input id="login" required placeholder="username" autocomplete="off" aria-label="GitHub username"></label>
+              <button class="btn primary">Look up</button>
+            </form>
+            <div id="result" class="muted" style="font-size:13.5px">Enter a GitHub username to see which NEAR account its payouts go to.</div>
+          </div>
+        </section>
+        <section class="card" aria-labelledby="how-h">
+          <div class="card-h"><h2 id="how-h">Link your account</h2></div>
+          <div class="card-b">
+            <ol style="margin:0;padding-left:18px;display:grid;gap:8px;font-size:13.5px;color:var(--muted)">
+              <li>Copy <a class="link" id="link-yml" target="_blank" rel="noopener">link.yml</a> into any repository you own.</li>
+              <li>Run it from the Actions tab with your NEAR account and <span class="mono" id="contract"></span>.</li>
+              <li>Submit the token it prints with the contract's <span class="mono">link</span> method.</li>
+            </ol>
+            <p class="faint" style="font-size:12.5px;margin:12px 0 0">Awards made before you link are held, and paid the moment you link.</p>
+          </div>
+        </section>
+      </div>
+
+      <section class="card">
+        <div class="table-wrap"><table class="t">
+          <thead><tr><th>Contributor</th><th>Payout account</th><th class="num">Paid</th><th class="num">Waiting</th><th class="num">PRs</th><th>Linked</th></tr></thead>
+          <tbody id="rows"><tr><td colspan="6"><span class="sk" style="width:60%"></span></td></tr></tbody>
+        </table></div>
+      </section>
+    </main>
+  </div>
+</div>
+<script type="module">
+import { mount } from './shell.mjs';
+import { h, $, amount, short, ext, avatar } from './ui.mjs';
+import { ago } from './model.mjs';
+
+const { cfg, chain, data, site } = mount('contributors', 'Contributors');
+$('contract').textContent = cfg.contract;
+$('link-yml').href = `https://github.com/${site.repo}/blob/main/.github/workflows/link.yml`;
+
+$('look').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const name = $('login').value.trim().replace(/^@/, '');
+  if (!/^[A-Za-z0-9-]{1,39}$/.test(name)) { $('result').textContent = 'That is not a valid GitHub username.'; return; }
+  $('result').textContent = 'Looking up…';
+  try {
+    const user = await chain.github(`/users/${name}`);
+    if (!user) { $('result').textContent = `GitHub has no user called ${name}.`; return; }
+    const link = await chain.view(cfg.contract, 'get_link', { github_id: user.id });
+    $('result').replaceChildren(h('div', { class: `verdict ${link ? 'ok' : ''}` }, avatar(user.id), h('div', {},
+      h('b', {}, link ? `${user.login} is paid at ${link.account}` : `${user.login} has not linked an account yet`),
+      h('p', {}, link ? `Linked with a GitHub token issued ${new Date(link.iat * 1000).toUTCString().slice(5, 22)} UTC.`
+        : 'Any award for their merged pull requests is held until they link one.'))));
+  } catch (err) {
+    $('result').textContent = `Could not look that up: ${err.message}`;
+  }
+});
+
+const d = await data;
+const { tok, model, names } = d;
+$('rows').replaceChildren(...(model.contributors.length ? model.contributors.map((c) => {
+  const login = names.users[c.githubId];
+  return h('tr', {},
+    h('td', {}, h('div', { class: 'who' }, avatar(c.githubId), login ? ext(`https://github.com/${login}`, login) : `GitHub user ${c.githubId}`)),
+    h('td', {}, c.link ? ext(cfg.accountUrl(c.link.account), c.link.account, 'link mono') : h('span', { class: 'faint' }, 'Not linked yet')),
+    h('td', { class: 'num' }, amount(c.paid, tok)),
+    h('td', { class: 'num' }, BigInt(c.pending) > 0n ? amount(c.pending, tok) : h('span', { class: 'faint' }, '—')),
+    h('td', { class: 'num' }, c.prs),
+    h('td', {}, c.link ? ext(cfg.txUrl(c.link.tx), ago(c.link.ts), 'link') : h('span', { class: 'faint' }, '—')),
+  );
+}) : [h('tr', {}, h('td', { colspan: 6, class: 'empty' }, 'No contributors yet.'))]));
+</script>
+</body>
+</html>

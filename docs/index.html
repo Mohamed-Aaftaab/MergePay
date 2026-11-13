@@ -5,9 +5,10 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>MergePay on NEAR</title>
 <meta name="description" content="Pay developers for every merged pull request. GitHub signs the merge, a NEAR contract checks the signature and releases USDC.">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%2307060b'/%3E%3Ctext x='16' y='22' font-family='Arial' font-size='15' font-weight='700' text-anchor='middle' fill='%23c6b6ff'%3E//%3C/text%3E%3C/svg%3E">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Inter:opsz,wght@14..32,300..600&family=Poppins:wght@400;500;600&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Inter:opsz,wght@14..32,300..600&family=JetBrains+Mono:wght@600&family=Poppins:wght@400;500;600&display=swap" rel="stylesheet">
 <link rel="preload" as="image" href="https://d2ol7oe51mr4n9.cloudfront.net/user_38xzZboKViGWJOttwIXH07lWA1P/f1631235-0a76-464d-8f1d-2c4b48a997d5.jpg">
 <link rel="stylesheet" href="site.css">
 <style>
@@ -52,8 +53,8 @@
   .d1 { animation-delay: 0.1s; } .d2 { animation-delay: 0.25s; } .d3 { animation-delay: 0.4s; } .d4 { animation-delay: 0.55s; }
   .d5 { animation-delay: 0.7s; } .d6 { animation-delay: 0.85s; } .d7 { animation-delay: 1s; }
 
-  .how { max-width: 1100px; margin: 0 auto; padding: 72px 16px 96px; }
-  .how h2 { font: 300 clamp(28px, 3.4vw, 40px)/1.15 var(--display); font-variation-settings: "opsz" 32; letter-spacing: -0.03em; margin: 0 0 32px; text-align: center; }
+  .how { padding-bottom: 72px; border-top: 0; }
+  .how h2 { margin: 0 0 32px; }
   .steps { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 16px; list-style: none; margin: 0; padding: 0; }
   .steps li { border-radius: 20px; padding: 24px; }
   .steps { counter-reset: step; }
@@ -62,7 +63,39 @@
   .steps h3::before { counter-increment: step; content: counter(step) ". "; color: var(--faint); }
   .steps p { margin: 0 0 18px; color: var(--muted); font-size: 14px; flex: 1; }
   .steps a { font-size: 13px; font-weight: 500; color: var(--lilac); text-underline-offset: 3px; }
-  footer { text-align: center; color: var(--faint); font-size: 13px; padding: 0 16px 40px; }
+  .ctas { display: flex; flex-wrap: wrap; gap: 12px; justify-content: center; }
+  .band { max-width: 1100px; margin: 0 auto; padding: 72px 16px; border-top: 1px solid rgb(255 255 255 / 0.06); }
+  .band h2 { font: 300 clamp(28px, 3.4vw, 42px)/1.12 var(--display); font-variation-settings: "opsz" 32; letter-spacing: -0.03em; margin: 0 0 32px; max-width: 22ch; }
+  .kicker { font: 600 11px/1 "JetBrains Mono", ui-monospace, monospace; letter-spacing: 0.14em; text-transform: uppercase; color: var(--lilac); margin: 0 0 14px; }
+  .live-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 14px; }
+  .live-card { border-radius: 18px; padding: 20px; }
+  .live-card .k { font-size: 13px; color: var(--muted); }
+  .live-card .v { font: 300 34px/1.15 var(--display); font-variation-settings: "opsz" 32; letter-spacing: -0.02em; margin-top: 10px; }
+  .live-card .s { font-size: 12.5px; color: var(--faint); margin-top: 4px; }
+  .band-links { display: flex; flex-wrap: wrap; gap: 24px; margin: 24px 0 0; }
+  .band-links a, .role a, .site-foot a { color: var(--lilac); text-decoration: none; font-weight: 500; font-size: 14px; }
+  .band-links a:hover, .role a:hover, .site-foot a:hover { text-decoration: underline; text-underline-offset: 3px; }
+  .cards3 { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; }
+  .role { border-radius: 20px; padding: 24px; display: flex; flex-direction: column; }
+  .role h3 { font-size: 13px; font-weight: 600; color: var(--muted); margin: 0 0 6px; text-transform: none; }
+  .role .lead { font: 400 21px/1.3 var(--display); letter-spacing: -0.01em; margin: 0 0 16px; color: var(--ink); }
+  .role ul, .trust ul, .start ol { margin: 0 0 20px; padding-left: 18px; display: grid; gap: 9px; color: var(--muted); font-size: 14px; flex: 1; }
+  .trust-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  .trust, .start { border-radius: 20px; padding: 24px; display: flex; flex-direction: column; align-items: flex-start; }
+  .trust h3, .start h3 { margin: 0 0 16px; font-size: 17px; font-weight: 600; }
+  .trust.yes h3 { color: var(--paid); }
+  .trust.no h3 { color: #ffb4ac; }
+  .trust b { color: var(--ink); font-weight: 600; }
+  .start code, .trust code { font: 12.5px "JetBrains Mono", ui-monospace, monospace; color: var(--pink); }
+  .site-foot .brand { color: var(--ink); font-size: 17px; }
+  .site-foot { max-width: 1100px; margin: 0 auto; padding: 48px 16px 56px; border-top: 1px solid rgb(255 255 255 / 0.06);
+    display: grid; grid-template-columns: 2fr 1fr 1fr; gap: 28px; color: var(--muted); font-size: 14px; }
+  .site-foot nav { display: flex; flex-direction: column; gap: 8px; }
+  .site-foot nav b { color: var(--ink); font-weight: 600; margin-bottom: 4px; }
+  .foot-brand p { max-width: 40ch; margin: 12px 0 0; }
+  .foot-note { grid-column: 1 / -1; color: var(--faint); font-size: 12.5px; margin: 8px 0 0; }
+  @media (max-width: 900px) { .live-grid { grid-template-columns: 1fr 1fr; } .cards3, .trust-grid { grid-template-columns: 1fr; } .site-foot { grid-template-columns: 1fr 1fr; } .foot-brand { grid-column: 1 / -1; } }
+  @media (max-width: 480px) { .live-grid { grid-template-columns: 1fr; } }
 
   @media (max-width: 640px) { .lede span { display: inline; } }
   /* the plate is cropped at the sides on narrower screens, which would cut the tags off */
@@ -84,14 +117,14 @@
     <a class="brand" href="./"><span class="brand-mark" aria-hidden="true">//</span>MergePay</a>
     <ul class="nav-links">
       <li><a href="./" aria-current="page">Home</a></li>
-      <li><a href="statement.html">Statement</a></li>
+      <li><a href="console.html">Console</a></li>
+      <li><a href="proof.html">Proof</a></li>
       <li><a href="#how">How it works</a></li>
-      <li><a data-repo-link="#for-the-bookkeeper" href="#">Bookkeeper guide</a></li>
-      <li><a data-contract-link href="#">Contract</a></li>
+      <li><a data-repo-link="#run-your-own" href="#">Docs</a></li>
     </ul>
     <div class="nav-end">
       <span class="chip-net"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c2.8 3 2.8 15 0 18M12 3c-2.8 3-2.8 15 0 18"/></svg>NEAR&nbsp;<span data-network></span></span>
-      <a class="pill pill-white" href="statement.html">Open statement</a>
+      <a class="pill pill-white" href="console.html">Open console</a>
       <a class="pill pill-outline" data-repo-link="" href="#">View code</a>
     </div>
   </nav>
@@ -104,14 +137,16 @@
     </h1>
     <p class="lede rise d4"><span>Put USDC in a pool for your repository and label the pull requests you'll pay for.</span>
       <span>On merge, GitHub signs a token and the contract checks it before paying the author.</span></p>
-    <a class="pill pill-white rise d5" href="statement.html">See the statement <span aria-hidden="true">→</span></a>
+    <div class="ctas rise d5"><a class="pill pill-white" href="console.html">Open the console <span aria-hidden="true">→</span></a>
+      <a class="pill pill-outline" id="verify-cta" href="proof.html">Verify a payout yourself</a></div>
   </div>
 
   <a class="scroll-hint rise d7" href="#how"><span class="mouse" aria-hidden="true"></span><span>How it works</span></a>
 </section>
 
-<section class="how" id="how" aria-labelledby="how-title">
-  <h2 id="how-title">How it works</h2>
+<section class="how band" id="how" aria-labelledby="how-title">
+  <p class="kicker">How it works</p>
+  <h2 id="how-title">What happens when a pull request merges.</h2>
   <ol class="steps">
     <li class="glass"><h3>Fund a pool</h3><p>Send USDC to the contract for one repository. You set the most a single pull request can earn and the date the pool closes. Whatever is left after that date goes back to you.</p>
       <a id="proof-fund" href="#" hidden>Latest funding transaction</a></li>
@@ -121,7 +156,73 @@
       <a id="proof-paid" href="#" hidden>Latest payout transaction</a></li>
   </ol>
 </section>
-<footer>MergePay on NEAR · built for NEAR HACKATHON 2026 · <span data-network></span> pilot, not audited</footer>
+<section class="band" id="live" aria-labelledby="live-title">
+  <p class="kicker">Live from the contract</p>
+  <h2 id="live-title">Running on NEAR <span data-network></span> today.</h2>
+  <div class="live-grid">
+    <div class="glass live-card"><div class="k">Pull requests paid</div><div class="v" id="l-paid">–</div><div class="s" id="l-paid-s">&nbsp;</div></div>
+    <div class="glass live-card"><div class="k" id="l-speed-k">Merge to payout</div><div class="v" id="l-speed">–</div><div class="s" id="l-speed-s">&nbsp;</div></div>
+    <div class="glass live-card"><div class="k">Signature check on-chain</div><div class="v" id="l-gas">–</div><div class="s">of NEAR's 300 TGas per-call limit</div></div>
+    <div class="glass live-card"><div class="k">Contributors linked</div><div class="v" id="l-people">–</div><div class="s" id="l-people-s">&nbsp;</div></div>
+  </div>
+  <p class="band-links"><a href="console.html">Open the console →</a><a id="verify-link" href="proof.html">Re-check the latest payout's signature →</a></p>
+</section>
+
+<section class="band" id="who" aria-labelledby="who-title">
+  <p class="kicker">Who it's for</p>
+  <h2 id="who-title">One merge. Three people served.</h2>
+  <div class="cards3">
+    <article class="glass role"><h3>The company paying</h3><p class="lead">Pays for accepted work only.</p>
+      <ul><li>Fund one pool per repository, once.</li><li>Every award is capped on-chain, whatever the label says.</li><li>Unspent funds go back to funders after the pool expires.</li></ul>
+      <a href="pools.html">See the pools →</a></article>
+    <article class="glass role"><h3>The contributor</h3><p class="lead">Paid seconds after the merge.</p>
+      <ul><li>No invoice to send and nothing to chase.</li><li>Link a NEAR account once, with a token GitHub signs for you.</li><li>If you haven't linked yet, your award waits for you.</li></ul>
+      <a href="contributors.html">Check your payout account →</a></article>
+    <article class="glass role"><h3>The bookkeeper</h3><p class="lead">A ledger they can reconcile alone.</p>
+      <ul><li>One CSV row per payment, each with its transaction.</li><li>A statement for any month, with totals and a due date.</li><li>Amounts exactly as the contract recorded them.</li></ul>
+      <a href="statement.html">Open the statement →</a></article>
+  </div>
+</section>
+
+<section class="band" id="trust" aria-labelledby="trust-title">
+  <p class="kicker">Trust model</p>
+  <h2 id="trust-title">What you trust, and what you don't.</h2>
+  <div class="trust-grid">
+    <div class="glass trust yes"><h3>You trust</h3><ul>
+      <li><b>GitHub's signing keys.</b> The contract accepts only tokens signed by keys registered in it. A new key waits 48 hours, and funders can withdraw meanwhile.</li>
+      <li><b>The workflow file the pool pins.</b> It turns labels into amounts; the cap limits what a wrong rate can cost.</li>
+      <li><b>Whoever can merge.</b> A merge is the approval, exactly as it is today.</li></ul></div>
+    <div class="glass trust no"><h3>You don't trust</h3><ul>
+      <li><b>This website.</b> It only reads the chain. You can verify every payout without it.</li>
+      <li><b>Whoever submits the transaction.</b> Who is paid and how much are inside GitHub's signature, so they can't change either.</li>
+      <li><b>The submitting key.</b> It can call award, link and pay on this contract, and nothing else.</li></ul></div>
+  </div>
+</section>
+
+<section class="band" id="start" aria-labelledby="start-title">
+  <p class="kicker">Get started</p>
+  <h2 id="start-title">Two ways in.</h2>
+  <div class="trust-grid">
+    <div class="glass start"><h3>Pay contributors from your repository</h3><ol>
+      <li>Fund a pool with the repository, the workflow, a cap per award and an expiry date.</li>
+      <li>Copy <code>award.yml</code> into the repository and set the rate card as a variable.</li>
+      <li>Label pull requests <code>pay:small</code>, <code>pay:medium</code> or <code>pay:large</code> and merge as usual.</li></ol>
+      <a class="pill pill-white" data-repo-link="#run-your-own" href="#">Setup guide</a></div>
+    <div class="glass start"><h3>Get paid for your pull requests</h3><ol>
+      <li>Copy <code>link.yml</code> into any repository you own.</li>
+      <li>Run it once with your NEAR account. GitHub signs that the account is yours.</li>
+      <li>Every labelled pull request of yours that merges is paid to that account.</li></ol>
+      <a class="pill pill-outline" href="contributors.html">Check your account</a></div>
+  </div>
+</section>
+
+<footer class="site-foot">
+  <div class="foot-brand"><a class="brand" href="./"><span class="brand-mark" aria-hidden="true">//</span>MergePay</a>
+    <p>Pay for merged pull requests, not invoices. Built for NEAR HACKATHON 2026, Real-World Money track.</p></div>
+  <nav aria-label="Product"><b>Console</b><a href="console.html">Overview</a><a href="payouts.html">Payouts</a><a href="proof.html">Proof</a><a href="statement.html">Statement</a><a href="system.html">System</a></nav>
+  <nav aria-label="Project"><b>Project</b><a data-repo-link="" href="#">Source code</a><a data-repo-link="#for-the-bookkeeper" href="#">Bookkeeper guide</a><a data-contract-link href="#">Contract</a><a data-repo-link="/actions/workflows/ci.yml" href="#">CI</a></nav>
+  <p class="foot-note">NEAR <span data-network></span> pilot. The contract has not had an independent audit yet; keep pools small.</p>
+</footer>
 
 <script>
   // The globe spins only through the video; reduced motion keeps the still.
@@ -136,6 +237,7 @@
   // Everything this page states about the pilot is read from the contract on load; nothing is typed in.
   import { SITE, settings } from './config.mjs';
   import { reader } from './chain.mjs';
+  import { decode } from './token.mjs';
   const cfg = settings();
   for (const a of document.querySelectorAll('[data-contract-link]')) a.href = cfg.accountUrl(cfg.contract);
   for (const a of document.querySelectorAll('[data-repo-link]')) a.href = `https://github.com/${SITE.repo}${a.dataset.repoLink}`;
@@ -151,26 +253,52 @@
 
   try {
     const chain = reader(cfg);
-    const { events, gas } = await chain.events();
+    const { events, gas, model, names, tok, calls } = await chain.load();
     const paid = events.filter((e) => e.event === 'paid').sort(byTime);
     const funded = events.filter((e) => e.event === 'funded').sort(byTime);
     if (funded.length) show('proof-fund', null, cfg.txUrl(funded.at(-1).tx));
+    document.getElementById('l-paid').textContent = model.totals.paidCount;
+    document.getElementById('l-paid-s').textContent = `${model.totals.awards} awarded in ${model.pools.length} pool${model.pools.length === 1 ? '' : 's'}`;
+    const linked = model.contributors.filter((c) => c.link).length;
+    document.getElementById('l-people').textContent = linked;
+    document.getElementById('l-people-s').textContent = `of ${model.contributors.length} paid so far`;
     if (paid.length) {
       const first = new Date(Number(BigInt(paid[0].ts) / 1_000_000n));
       const day = first.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'UTC' });
       document.getElementById('badge-text').textContent = `On NEAR ${cfg.network}. First pull request paid ${day}.`;
       const last = paid.at(-1);
       show('proof-paid', null, cfg.txUrl(last.tx));
+      const key = `${last.data.pool_id}:${last.data.pr}`;
+      for (const id of ['verify-cta', 'verify-link']) document.getElementById(id).href = `proof.html?award=${key}&verify=1`;
       const award = events.find((e) => e.event === 'award' && e.data.pool_id === last.data.pool_id && e.data.pr === last.data.pr);
-      const names = await chain.names(events);
-      const label = names.labels[`${last.data.pool_id}:${last.data.pr}`];
+      const label = names.labels[key];
       show('tag-pr', `PR #${last.data.pr} merged${label ? ` with ${label}` : ''}`);
-      if (award && gas[award.tx]) show('tag-gas', `Signature checked on-chain, ${(gas[award.tx] / 1e12).toFixed(1)} TGas`);
+      if (award && gas[award.tx]) {
+        const tgas = (gas[award.tx] / 1e12).toFixed(1);
+        show('tag-gas', `Signature checked on-chain, ${tgas} TGas`);
+        document.getElementById('l-gas').textContent = `${tgas} TGas`;
+      }
       const terms = funded.find((e) => e.data.pool_id === last.data.pool_id)?.data.terms;
       const repo = terms && names.repos[terms.repo_id];
-      const file = terms?.workflow.split('/.github/workflows/')[1]?.split('@')[0];
-      if (repo && file) {
-        const runs = await chain.github(`/repos/${repo}/actions/workflows/${file}/runs?status=success&per_page=1`);
+      if (repo) {
+        // merge time comes from GitHub, payout time from the chain
+        const issue = await chain.github(`/repos/${repo}/issues/${last.data.pr}`);
+        const secs = issue?.closed_at ? Math.round((Number(BigInt(last.ts) / 1_000_000n) - Date.parse(issue.closed_at)) / 1000) : null;
+        if (secs !== null && secs > 0) {
+          document.getElementById('l-speed').textContent = `${secs} s`;
+          document.getElementById('l-speed-s').textContent = `PR #${last.data.pr}: merged, signed, verified and paid`;
+        } else if (award) {
+          // GitHub's API unavailable: the token's issue time, stored on-chain, is seconds after the merge
+          const iat = decode(calls[award.tx]?.jwt)?.claims.iat;
+          const fromSig = iat ? Math.round(Number(BigInt(last.ts) / 1_000_000_000n) - iat) : null;
+          if (fromSig !== null && fromSig >= 0) {
+            document.getElementById('l-speed-k').textContent = 'GitHub signature to payout';
+            document.getElementById('l-speed').textContent = `${fromSig} s`;
+            document.getElementById('l-speed-s').textContent = `PR #${last.data.pr}, timed from the token's issue time`;
+          }
+        }
+        const file = terms.workflow.split('/.github/workflows/')[1]?.split('@')[0];
+        const runs = file ? await chain.github(`/repos/${repo}/actions/workflows/${file}/runs?status=success&per_page=1`) : null;
         const run = runs?.workflow_runs?.[0];
         if (run) show('proof-run', null, run.html_url);
       }
