@@ -52,7 +52,7 @@
 
       <section class="card">
         <div class="table-wrap"><table class="t">
-          <thead><tr><th>Contributor</th><th>Payout account</th><th class="num">Paid</th><th class="num">Waiting</th><th class="num">PRs</th><th>Linked</th></tr></thead>
+          <thead><tr><th>Contributor</th><th>Payout account</th><th class="num">Paid</th><th class="num opt">Waiting</th><th class="num opt">PRs</th><th class="opt">Linked</th></tr></thead>
           <tbody id="rows"><tr><td colspan="6"><span class="sk" style="width:60%"></span></td></tr></tbody>
         </table></div>
       </section>
@@ -74,7 +74,7 @@ $('look').addEventListener('submit', async (e) => {
   if (!/^[A-Za-z0-9-]{1,39}$/.test(name)) { $('result').textContent = 'That is not a valid GitHub username.'; return; }
   $('result').textContent = 'Looking up…';
   try {
-    const user = await chain.github(`/users/${name}`);
+    const user = await chain.github(`/users/${name}`, true);
     if (!user) { $('result').textContent = `GitHub has no user called ${name}.`; return; }
     const link = await chain.view(cfg.contract, 'get_link', { github_id: user.id });
     $('result').replaceChildren(h('div', { class: `verdict ${link ? 'ok' : ''}` }, avatar(user.id), h('div', {},
@@ -82,7 +82,7 @@ $('look').addEventListener('submit', async (e) => {
       h('p', {}, link ? `Linked with a GitHub token issued ${new Date(link.iat * 1000).toUTCString().slice(5, 22)} UTC.`
         : 'Any award for their merged pull requests is held until they link one.'))));
   } catch (err) {
-    $('result').textContent = `Could not look that up: ${err.message}`;
+    $('result').textContent = err.message;
   }
 });
 
@@ -92,11 +92,11 @@ $('rows').replaceChildren(...(model.contributors.length ? model.contributors.map
   const login = names.users[c.githubId];
   return h('tr', {},
     h('td', {}, h('div', { class: 'who' }, avatar(c.githubId), login ? ext(`https://github.com/${login}`, login) : `GitHub user ${c.githubId}`)),
-    h('td', {}, c.link ? ext(cfg.accountUrl(c.link.account), c.link.account, 'link mono') : h('span', { class: 'faint' }, 'Not linked yet')),
+    h('td', {}, c.link ? h('a', { href: cfg.accountUrl(c.link.account), class: 'link mono', target: '_blank', rel: 'noopener', title: c.link.account }, short(c.link.account, 12, 8)) : h('span', { class: 'faint' }, 'Not linked yet')),
     h('td', { class: 'num' }, amount(c.paid, tok)),
-    h('td', { class: 'num' }, BigInt(c.pending) > 0n ? amount(c.pending, tok) : h('span', { class: 'faint' }, '—')),
-    h('td', { class: 'num' }, c.prs),
-    h('td', {}, c.link ? ext(cfg.txUrl(c.link.tx), ago(c.link.ts), 'link') : h('span', { class: 'faint' }, '—')),
+    h('td', { class: 'num opt' }, BigInt(c.pending) > 0n ? amount(c.pending, tok) : h('span', { class: 'faint' }, '—')),
+    h('td', { class: 'num opt' }, c.prs),
+    h('td', { class: 'opt' }, c.link ? ext(cfg.txUrl(c.link.tx), ago(c.link.ts), 'link') : h('span', { class: 'faint' }, '—')),
   );
 }) : [h('tr', {}, h('td', { colspan: 6, class: 'empty' }, 'No contributors yet.'))]));
 </script>

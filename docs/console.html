@@ -43,7 +43,7 @@
         <section class="card" aria-labelledby="latest-h">
           <div class="card-h"><h2 id="latest-h">Latest payouts</h2><a class="more" href="payouts.html">All payouts →</a></div>
           <div class="table-wrap"><table class="t">
-            <thead><tr><th>Pull request</th><th>Contributor</th><th class="num">Amount</th><th>Status</th><th>When</th></tr></thead>
+            <thead><tr><th>Pull request</th><th class="opt">Contributor</th><th class="num">Amount</th><th>Status</th><th class="opt">When</th></tr></thead>
             <tbody id="latest"><tr><td colspan="5"><span class="sk" style="width:60%"></span></td></tr></tbody>
           </table></div>
         </section>
@@ -75,11 +75,12 @@ const proofHref = (a) => `proof.html?award=${a.pool}:${a.pr}${cfg.pools.length &
 // totals
 const unspent = Object.values(live).reduce((s, p) => s + BigInt(p?.balance ?? 0), 0n).toString();
 const refunded = awards.filter((a) => a.status === 'Refunded').length;
-$('s-paid').replaceChildren(amount(totals.paid, tok));
+$('s-paid').replaceChildren(amount(totals.paid, tok, true, 4));
 $('s-paid-n').textContent = `${totals.paidCount} pull request${totals.paidCount === 1 ? '' : 's'} paid`;
-$('s-pending').replaceChildren(amount(totals.pending, tok));
-$('s-pending-n').textContent = `${totals.awards - totals.paidCount - refunded} waiting for a linked account`;
-$('s-pools').replaceChildren(amount(unspent, tok));
+$('s-pending').replaceChildren(amount(totals.pending, tok, true, 4));
+const waiting = totals.awards - totals.paidCount - refunded;
+$('s-pending-n').textContent = waiting ? `${waiting} award${waiting === 1 ? '' : 's'} waiting for a linked account` : 'Nothing waiting: every award is paid';
+$('s-pools').replaceChildren(amount(unspent, tok, true, 4));
 $('s-pools-n').textContent = `${pools.length} pool${pools.length === 1 ? '' : 's'} · funded ${amount(totals.funded, tok).textContent}`;
 $('s-people').textContent = totals.contributors;
 $('s-people-n').textContent = `${contributors.filter((c) => c.link).length} linked to a NEAR account`;
@@ -116,10 +117,10 @@ if (!latest) {
 // latest payouts
 $('latest').replaceChildren(...(awards.length ? awards.slice(0, 6).map((a) => h('tr', { class: 'click', onclick: () => { location.href = proofHref(a); } },
   h('td', {}, h('a', { class: 'link', href: proofHref(a) }, `${repoOf(a.pool)?.split('/')[1] ?? `pool ${a.pool}`} #${a.pr}`)),
-  h('td', {}, h('div', { class: 'who' }, avatar(a.githubId), login(a.githubId))),
+  h('td', { class: 'opt' }, h('div', { class: 'who' }, avatar(a.githubId), login(a.githubId))),
   h('td', { class: 'num' }, amount(a.amount, tok)),
   h('td', {}, status(a.status)),
-  h('td', { class: 'faint' }, ago(a.payoutTs ?? a.awardTs)),
+  h('td', { class: 'faint opt' }, ago(a.payoutTs ?? a.awardTs)),
 )) : [h('tr', {}, h('td', { colspan: 5, class: 'empty' }, 'No awards yet.'))]));
 
 // pools

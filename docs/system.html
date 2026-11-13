@@ -38,7 +38,7 @@
       <section class="card" style="margin-top:16px" aria-labelledby="k-h">
         <div class="card-h"><h2 id="k-h">GitHub signing keys</h2><span id="k-change" class="faint mono"></span></div>
         <div class="table-wrap"><table class="t">
-          <thead><tr><th>Key id</th><th>In the contract</th><th>Active since</th><th>Tokens seen</th><th>Last used</th></tr></thead>
+          <thead><tr><th>Key id</th><th>In the contract</th><th class="opt">Active since</th><th class="opt">Tokens seen</th><th class="opt">Last used</th></tr></thead>
           <tbody id="keys"><tr><td colspan="5"><span class="sk" style="width:60%"></span></td></tr></tbody>
         </table></div>
         <div class="card-b" style="border-top:1px solid var(--hair)" id="keycheck"></div>
@@ -46,7 +46,7 @@
       <section class="card" style="margin-top:16px" aria-labelledby="w-h">
         <div class="card-h"><h2 id="w-h">Workflows</h2></div>
         <div class="table-wrap"><table class="t">
-          <thead><tr><th>Workflow</th><th>What it does</th><th>Last run</th><th>Result</th></tr></thead>
+          <thead><tr><th>Workflow</th><th class="opt">What it does</th><th class="opt">Last run</th><th>Result</th></tr></thead>
           <tbody id="workflows"><tr><td colspan="4"><span class="sk" style="width:60%"></span></td></tr></tbody>
         </table></div>
       </section>
@@ -91,11 +91,11 @@ for (const [tx, call] of Object.entries(calls)) {
 const keys = await Promise.all([...seen.values()].map(async (k) => ({ ...k, stored: await chain.view(cfg.contract, 'get_key', { kid: k.kid }) })));
 const nowS = Date.now() / 1000;
 $('keys').replaceChildren(...(keys.length ? keys.map((k) => h('tr', {},
-  h('td', { class: 'mono' }, k.kid),
+  h('td', { class: 'mono wrap' }, k.kid),
   h('td', {}, k.stored ? h('span', { class: `pill-s ${k.stored.active_at > nowS ? 's-Pending' : 's-Paid'}` }, k.stored.active_at > nowS ? 'Time-locked' : 'Trusted') : h('span', { class: 'pill-s s-Refunded' }, 'Revoked')),
-  h('td', {}, k.stored ? new Date(k.stored.active_at * 1000).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }) : '—'),
-  h('td', { class: 'num', style: 'text-align:left' }, k.count),
-  h('td', {}, k.lastTx ? ext(cfg.txUrl(k.lastTx), ago(k.lastTs), 'link') : '—'),
+  h('td', { class: 'opt' }, k.stored ? new Date(k.stored.active_at * 1000).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }) : '—'),
+  h('td', { class: 'opt' }, k.count),
+  h('td', { class: 'opt' }, k.lastTx ? ext(cfg.txUrl(k.lastTx), ago(k.lastTs), 'link') : '—'),
 )) : [h('tr', {}, h('td', { colspan: 5, class: 'empty' }, 'No tokens submitted yet.'))]));
 $('k-change').textContent = keyChange > nowS ? `Key change pending until ${new Date(keyChange * 1000).toUTCString()} · funders may refund early` : 'No key change pending';
 
@@ -113,8 +113,8 @@ const wf = [
 ];
 $('workflows').replaceChildren(...wf.map(([file, what, r]) => h('tr', {},
   h('td', {}, ext(`https://github.com/${site.repo}/blob/main/.github/workflows/${file}`, file, 'link mono')),
-  h('td', { class: 'muted', style: 'white-space:normal' }, what),
-  h('td', {}, r ? ext(r.html_url, ago(String(BigInt(Date.parse(r.updated_at)) * 1_000_000n)), 'link') : '—'),
+  h('td', { class: 'muted opt', style: 'white-space:normal;min-width:260px' }, what),
+  h('td', { class: 'opt' }, r ? ext(r.html_url, ago(String(BigInt(Date.parse(r.updated_at)) * 1_000_000n)), 'link') : '—'),
   h('td', {}, result(r)))));
 $('keycheck').replaceChildren(h('div', { class: `verdict ${keyRun?.conclusion === 'success' ? 'ok' : ''}` }, h('div', {},
   h('b', {}, keyRun ? (keyRun.conclusion === 'success' ? 'GitHub signs only with keys this contract trusts.' : 'The last key check did not pass.') : limited ? "Could not read the key check: GitHub's hourly limit for this browser is used up." : 'The daily key check has not run yet.'),
@@ -128,7 +128,9 @@ const ghLimit = limit;
 const svc = [
   [rpcMs !== null, 'NEAR RPC', rpcMs !== null ? `${cfg.rpcs[0].replace('https://', '')} answered in ${rpcMs} ms` : 'unreachable'],
   [true, 'NearBlocks API', `listed ${Object.keys(d.gas).length} transactions for this contract`],
-  [Boolean(ghLimit) && !limited, 'GitHub API', ghLimit ? `${ghLimit.resources.core.remaining} of ${ghLimit.resources.core.limit} requests left this hour` : 'unreachable'],
+  [Boolean(ghLimit) && !limited, 'GitHub API', !ghLimit ? 'unreachable' : limited
+    ? `hourly limit for this browser used up; resets at ${new Date(ghLimit.resources.core.reset * 1000).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })}`
+    : `${ghLimit.resources.core.remaining} of ${ghLimit.resources.core.limit} anonymous requests left this hour`],
   [true, 'Explorer links', cfg.explorer.replace('https://', '')],
 ];
 $('services').replaceChildren(...svc.map(([ok, name, detail]) => h('li', { class: ok ? null : 'no' }, h('div', {}, name, h('br'), h('span', { class: 'mono' }, detail)))));

@@ -69,6 +69,10 @@ const { tok, model, names, gas, calls } = d;
 const params = new URLSearchParams(location.search);
 const chosen = params.get('award');
 const award = model.awards.find((a) => a.key === chosen) ?? model.awards.find((a) => a.status === 'Paid') ?? model.awards[0];
+if (chosen && award && award.key !== chosen) {
+  $('page').prepend(h('div', { class: 'notice', role: 'status', style: 'color:var(--pending);border-color:rgb(255 210 122 / 0.35);background:rgb(255 210 122 / 0.06)' },
+    `There is no payout ${chosen} in the pools shown, so this is the latest one instead.`));
+}
 if (!award) {
   $('title').textContent = 'No payouts to prove yet.';
   throw new Error('no awards');

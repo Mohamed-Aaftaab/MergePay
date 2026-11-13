@@ -16,15 +16,20 @@ export function h(tag, attrs = {}, ...children) {
 
 export const $ = (id) => document.getElementById(id);
 
-/** Token amount for display: at most 6 decimals, marked "≈" when rounded; the exact value is on hover and in the CSV. */
-export function amount(base, tok, withSymbol = true) {
+/** Display text for a token amount: at most `max` decimals, "≈" when rounded, "<" for dust. Exact value stays in the CSV. */
+export function amountText(base, tok, max = 6) {
   const full = formatAmount(base, tok.decimals).replace(/\.?0+$/, '') || '0';
   const [whole, frac = ''] = full.split('.');
-  let text = frac.length > 6 ? `${whole}.${frac.slice(0, 6)}`.replace(/\.?0+$/, '') : full;
-  const rounded = text !== full;
-  if (rounded && /^0(\.0*)?$/.test(text)) text = '0.000001';
-  const shown = rounded ? (text === '0.000001' && BigInt(base) > 0n && whole === '0' && /^0{6}/.test(frac) ? `< ${text}` : `≈ ${text}`) : text;
-  return h('span', { title: rounded ? `${full} ${tok.symbol} exactly` : null, class: 'amt' }, withSymbol ? `${shown} ${tok.symbol}` : shown);
+  if (frac.length <= max) return { text: full, full, rounded: false };
+  const cut = `${whole}.${frac.slice(0, max)}`.replace(/\.?0+$/, '');
+  if (/^0$/.test(cut)) return { text: `< 0.${'0'.repeat(max - 1)}1`, full, rounded: true };
+  return { text: `≈ ${cut}`, full, rounded: true };
+}
+
+/** Token amount element; hover shows the exact value when the display is rounded. */
+export function amount(base, tok, withSymbol = true, max = 6) {
+  const { text, full, rounded } = amountText(base, tok, max);
+  return h('span', { title: rounded ? `${full} ${tok.symbol} exactly` : null, class: 'amt' }, withSymbol ? `${text} ${tok.symbol}` : text);
 }
 
 /** ".github/workflows/award.yml @ main" from a job_workflow_ref like owner/repo/.github/workflows/award.yml@refs/heads/main */

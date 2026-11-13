@@ -41,9 +41,9 @@
       <section class="card" aria-labelledby="lines-h">
         <div class="card-h"><h2 id="lines-h">Line items</h2><span class="faint mono" id="lines-n"></span></div>
         <div class="table-wrap"><table class="t">
-          <thead><tr><th>Date (UTC)</th><th>Pull request</th><th>Contributor or funder</th><th>Label</th><th class="num">Rate</th><th class="num">Amount (<span class="symbol">token</span>)</th><th>Status</th><th>Transaction</th></tr></thead>
+          <thead><tr><th class="opt">Date (UTC)</th><th>Pull request</th><th class="opt">Contributor or funder</th><th class="opt">Label</th><th class="num opt">Rate</th><th class="num">Amount (<span class="symbol">token</span>)</th><th>Status</th><th class="opt">Transaction</th></tr></thead>
           <tbody id="rows"><tr><td colspan="8"><span class="sk" style="width:60%"></span></td></tr></tbody>
-          <tfoot><tr><td colspan="5" style="font-weight:600">Total paid in period</td><td class="num" style="font-weight:600" id="foot"></td><td colspan="2"></td></tr></tfoot>
+          <tfoot><tr><td colspan="8"><div style="display:flex;justify-content:space-between;gap:16px;font-weight:600"><span>Total paid in period</span><span class="mono" id="foot"></span></div></td></tr></tfoot>
         </table></div>
       </section>
       <p class="faint" style="font-size:12.5px;margin-top:14px" id="note"></p>
@@ -52,7 +52,7 @@
 </div>
 <script type="module">
 import { mount } from './shell.mjs';
-import { h, $, status, ext } from './ui.mjs';
+import { h, $, status, ext, amount, amountText } from './ui.mjs';
 import { buildRows, statement, sumAmounts, toCsv, formatAmount } from './ledger.mjs';
 
 const { cfg, data } = mount('statement', 'Statement');
@@ -64,8 +64,10 @@ const { tok, events, names, live } = d;
 const rows = buildRows(events, { explorer: cfg.txUrl(''), names, decimals: tok.decimals });
 for (const el of document.querySelectorAll('.symbol')) el.textContent = tok.symbol;
 const unspent = Object.values(live).reduce((s, p) => s + BigInt(p?.balance ?? 0), 0n);
-$('t-pools').textContent = `${formatAmount(unspent.toString(), tok.decimals).replace(/\.?0+$/, '')} ${tok.symbol}`;
-$('t-pending').textContent = `${sumAmounts(rows.filter((r) => r.status === 'Pending'), tok.decimals).replace(/\.?0+$/, '') || '0'} ${tok.symbol}`;
+$('t-pools').replaceChildren(amount(unspent.toString(), tok, true, 4));
+// rows carry decimal strings; back to base units for display
+const base = (dec) => BigInt(dec.replace('.', '')).toString();
+$('t-pending').replaceChildren(amount(base(sumAmounts(rows.filter((r) => r.status === 'Pending'), tok.decimals)), tok, true, 4));
 $('note').textContent = `Amounts are in ${tok.symbol} (${tok.account}) with all ${tok.decimals} decimals, as the contract reports them; the CSV keeps every digit. `
   + `The due date is ${cfg.dueDays} days after the period ends.` + (tok.symbol === 'USDC' ? '' : ' This deployment pays in a stand-in token, so these are not dollars.');
 
@@ -78,23 +80,22 @@ function download(name, list) {
 
 function render(period) {
   const { lines, totalPaid } = statement(rows, period, tok.decimals);
-  const trim = (v) => v.replace(/\.?0+$/, '') || '0';
-  $('t-paid').textContent = `${trim(totalPaid)} ${tok.symbol}`;
-  $('foot').textContent = trim(totalPaid);
+  $('t-paid').replaceChildren(amount(base(totalPaid), tok, true, 4));
+  $('foot').replaceChildren(amount(base(totalPaid), tok));
   const [y, m] = period.split('-').map(Number);
   const due = new Date(Date.UTC(y, m, cfg.dueDays));
   $('t-due').textContent = due.toISOString().slice(0, 10);
   $('t-due-s').textContent = `${cfg.dueDays} days after ${new Date(Date.UTC(y, m - 1, 1)).toLocaleDateString('en-GB', { month: 'long', year: 'numeric', timeZone: 'UTC' })}`;
   $('lines-n').textContent = `${lines.length} line${lines.length === 1 ? '' : 's'}`;
   $('rows').replaceChildren(...(lines.length ? [...lines].reverse().map((r) => h('tr', {},
-    h('td', { class: 'mono' }, r.date_utc.replace('T', ' ').replace('Z', '')),
-    h('td', {}, r.pr_url ? ext(r.pr_url, `${r.repo.split('/')[1]} #${r.pr_number}`) : h('span', { class: 'faint' }, r.repo || '—')),
-    h('td', {}, r.contributor_github ? ext(`https://github.com/${r.contributor_github}`, r.contributor_github) : h('span', { class: 'mono' }, r.contributor_near_account || '—')),
-    h('td', { class: 'mono' }, r.label || '—'),
-    h('td', { class: 'num mono' }, r.rate_usd || '—'),
-    h('td', { class: 'num mono', title: r.amount_usdc }, trim(r.amount_usdc)),
+    h('td', { class: 'mono opt' }, r.date_utc.replace('T', ' ').replace('Z', '')),
+    h('td', {}, r.pr_url ? ext(r.pr_url, `${r.repo.split('/')[1]} #${r.pr_number}`) : h('span', { class: 'faint', title: r.repo }, r.label === 'funding' ? 'Pool funding' : r.label === 'refund' ? 'Refund to funder' : r.repo || '—')),
+    h('td', { class: 'opt' }, r.contributor_github ? ext(`https://github.com/${r.contributor_github}`, r.contributor_github) : h('span', { class: 'mono' }, r.contributor_near_account || '—')),
+    h('td', { class: 'mono opt' }, r.label || '—'),
+    h('td', { class: 'num mono opt' }, r.rate_usd ? amount(base(r.amount_usdc), tok, false) : '—'),
+    h('td', { class: 'num mono' }, amount(base(r.amount_usdc), tok, false)),
     h('td', {}, status(r.status)),
-    h('td', {}, ext(r.explorer_url, r.explorer_url.split('/').pop().slice(0, 8) + '…', 'link mono')),
+    h('td', { class: 'opt' }, ext(r.explorer_url, r.explorer_url.split('/').pop().slice(0, 8) + '…', 'link mono')),
   )) : [h('tr', {}, h('td', { colspan: 8, class: 'empty' }, 'No payments in this period.'))]));
   $('csv-period').onclick = () => download(`mergepay-${period}.csv`, lines);
   $('csv-all').onclick = () => download('mergepay-all.csv', rows);

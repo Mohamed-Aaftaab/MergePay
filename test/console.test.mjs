@@ -79,3 +79,17 @@ test('relative times read naturally', () => {
   assert.equal(ago(ns(0), 7_200_000), '2 h ago');
   assert.equal(ago(ns(0), 3 * 86_400_000), '3 d ago');
 });
+
+test('amounts display rounded to a few decimals, dust as "<", exact values left alone', async () => {
+  const { amountText } = await import('../docs/ui.mjs');
+  const wnear = { decimals: 24, symbol: 'wNEAR' };
+  const usdc = { decimals: 6, symbol: 'USDC' };
+  assert.equal(amountText('10000000000000000000000', wnear).text, '0.01');
+  assert.equal(amountText('20000000000000000005000000', wnear).text, '≈ 20');
+  assert.equal(amountText('879999999999999995000000', wnear, 4).text, '≈ 0.8799');
+  assert.equal(amountText('5000000', wnear).text, '< 0.000001');
+  assert.equal(amountText('5000000', usdc).text, '5');
+  assert.equal(amountText('1500001', usdc).text, '1.500001');
+  assert.equal(amountText('0', usdc).text, '0');
+  assert.equal(amountText('20000000000000000005000000', wnear).full, '20.000000000000000005');
+});

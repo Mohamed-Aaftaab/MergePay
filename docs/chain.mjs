@@ -109,12 +109,20 @@ export function reader(cfg, onStatus = () => {}) {
     return { events: out.filter(inPools), gas, calls };
   }
 
-  async function github(path) {
+  /** GitHub's public API. Returns null when GitHub says "not found"; for other failures, null unless `strict`. */
+  async function github(path, strict = false) {
     const key = `mergepay:gh:${path}`;
     const hit = cache.get(key);
     if (hit) return hit;
-    const res = await fetch(`https://api.github.com${path}`);
-    if (!res.ok) return null; // unauthenticated limit is 60 an hour; names fall back to ids
+    let res;
+    try { res = await fetch(`https://api.github.com${path}`); } catch (err) { if (strict) throw new Error('GitHub could not be reached.'); return null; }
+    if (res.status === 404) return null;
+    if (!res.ok) {
+      // anonymous visitors get 60 requests an hour; past that GitHub answers 403 or 429
+      if (strict) throw new Error(res.status === 403 || res.status === 429
+        ? "GitHub's hourly limit for anonymous lookups is used up in this browser. Try again later." : `GitHub answered ${res.status}.`);
+      return null;
+    }
     const body = await res.json();
     if (!path.includes('/runs')) cache.set(key, body); // workflow runs change; names and labels don't
     return body;
@@ -167,10 +175,11 @@ export function reader(cfg, onStatus = () => {}) {
     const tok = await token();
     const { events: evts, gas, calls } = await events();
     const [live, nm] = await Promise.all([pools(evts), names(evts)]);
-    // The tokens on-chain name their repository, so names survive GitHub's anonymous rate limit
+    // The tokens on-chain name their repository (and, for links, the linking user), so names survive GitHub's rate limit
     for (const call of Object.values(calls)) {
       const c = decode(call.jwt)?.claims;
       if (c?.repository_id && c.repository && !nm.repos[c.repository_id]) nm.repos[c.repository_id] = c.repository;
+      if (call.method === 'link' && c?.actor_id && c.actor && !nm.users[c.actor_id]) nm.users[c.actor_id] = c.actor;
     }
     return { tok, events: evts, gas, calls, live, names: nm, model: buildModel(evts) };
   }
