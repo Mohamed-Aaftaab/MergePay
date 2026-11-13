@@ -8,8 +8,8 @@ contract checks GitHub's signature, and the contract pays the developer in USDC.
 
 Built for NEAR HACKATHON (Nov 1–14, 2026), track 08 Real-World Money.
 
-**Try it:** [site](https://mohamed-aaftaab.github.io/MergePay/) ·
-[payroll statement and CSV](https://mohamed-aaftaab.github.io/MergePay/statement.html?period=2026-11) ·
+**Try it:** [site](https://mergepay-near.vercel.app/) ([GitHub Pages mirror](https://mohamed-aaftaab.github.io/MergePay/)) ·
+[payroll statement and CSV](https://mergepay-near.vercel.app/statement.html?period=2026-11) ·
 [contract on testnet](https://testnet.near.rocks/account/pay.mergepay-482529.testnet) ·
 [merged PRs that were paid](https://github.com/Mohamed-Aaftaab/MergePay/pulls?q=is%3Apr+is%3Amerged+label%3Apay%3Asmall)
 
@@ -103,7 +103,7 @@ contract.
 
 ## Statement page and CSV
 
-Live: **https://mohamed-aaftaab.github.io/MergePay/statement.html?period=2026-11**
+Live: **https://mergepay-near.vercel.app/statement.html?period=2026-11** (also served from GitHub Pages)
 
 `docs/statement.html` is a static page (`docs/index.html` is the landing page; both share
 `docs/site.css`, `docs/config.mjs` and `docs/chain.mjs`). It lists the contract's activity from the
