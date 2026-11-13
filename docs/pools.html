@@ -24,7 +24,7 @@
           <h1>Funds waiting for merged work.</h1>
           <p>Each pool belongs to one repository and one pinned workflow. The contract pays awards from it, up to the cap, and nothing else can move it before expiry.</p>
         </div>
-        <button class="btn primary" id="new-pool" type="button">Open a new pool</button>
+        <button class="btn primary" id="new-pool" type="button" disabled>Open a new pool</button>
       </div>
       <div class="grid" id="pools"><div class="card card-b"><span class="sk" style="width:60%"></span></div></div>
     </main>
@@ -73,6 +73,7 @@ $('new-pool').addEventListener('click', () => {
     fundCmd(JSON.stringify(terms)), `Amounts are in base units: ${tok.symbol} has ${tok.decimals} decimals. The expiry above is 30 days from now. Then point the repository variable MERGEPAY_POOL_ID at the new pool.`);
 });
 
+$('new-pool').disabled = false; // enabled only once its handler and data are ready
 $('pools').replaceChildren(...(model.pools.length ? model.pools.map((p) => {
   const state = live[p.id];
   const terms = p.terms ?? state?.terms ?? {};
@@ -96,7 +97,7 @@ $('pools').replaceChildren(...(model.pools.length ? model.pools.map((p) => {
     h('div', { class: 'card-b grid pool-body' },
       h('div', {},
         h('div', { style: 'display:flex;justify-content:space-between;align-items:baseline;margin-bottom:10px' },
-          h('div', {}, h('div', { class: 'faint', style: 'font-size:12.5px' }, 'Unspent'), h('div', { style: 'font:300 30px var(--display);letter-spacing:-0.02em' }, amount(balance.toString(), tok))),
+          h('div', {}, h('div', { class: 'faint', style: 'font-size:12.5px' }, 'Unspent'), h('div', { style: 'font:300 30px var(--display);letter-spacing:-0.02em' }, amount(balance.toString(), tok, true, 4))),
           h('div', { class: 'faint', style: 'font-size:12.5px;text-align:right' }, `of ${amount(p.funded, tok).textContent} funded`)),
         h('div', { class: 'bar' }, h('i', { class: 'a', style: `width:${pct(awarded)}%` }), h('i', { style: `width:${pct(refunded)}%;background:var(--refunded)` }), h('i', { class: 'u', style: `width:${pct(balance)}%` })),
         h('div', { class: 'legend' },
@@ -104,9 +105,9 @@ $('pools').replaceChildren(...(model.pools.length ? model.pools.map((p) => {
           refunded > 0n ? h('span', { style: '--c:var(--refunded)' }, `${amount(p.refunded, tok).textContent} refunded`) : '',
           h('span', { style: '--c:rgb(123 224 174 / 0.75)' }, 'unspent')),
         h('h3', { style: 'font-size:13px;font-weight:600;margin:24px 0 10px' }, 'Funders'),
-        h('div', { class: 'table-wrap' }, h('table', { class: 't' }, h('thead', {}, h('tr', {}, h('th', {}, 'Account'), h('th', { class: 'num' }, 'Put in'), h('th', { class: 'num' }, 'Refund share'))),
+        h('div', { class: 'table-wrap' }, h('table', { class: 't' }, h('thead', {}, h('tr', {}, h('th', {}, 'Account'), h('th', { class: 'num' }, 'Put in'), h('th', { class: 'num' }, 'Share'))),
           h('tbody', {}, Object.entries(p.funders).map(([acct, amt]) => h('tr', {},
-            h('td', {}, ext(cfg.accountUrl(acct), short(acct, 16, 8), 'link mono')),
+            h('td', {}, h('a', { href: cfg.accountUrl(acct), class: 'link mono', target: '_blank', rel: 'noopener', title: acct }, short(acct, 10, 8))),
             h('td', { class: 'num' }, amount(amt, tok)),
             h('td', { class: 'num' }, totalShares > 0n ? `${(Number((shares[`${p.id}:${acct}`] * 10000n) / totalShares) / 100).toFixed(2)}%` : '—'))))))),
       h('dl', { class: 'kv' },

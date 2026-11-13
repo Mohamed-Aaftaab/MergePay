@@ -32,7 +32,7 @@
           <label class="field" style="width:min(340px,100%)"><span id="search-ico"></span><input id="q" type="search" placeholder="PR, GitHub user or NEAR account" aria-label="Search payouts"></label>
         </div>
         <div class="table-wrap"><table class="t">
-          <thead><tr><th>Pull request</th><th>Contributor</th><th>Payout account</th><th class="num">Amount</th><th>Status</th><th>Awarded</th><th>Transactions</th><th></th></tr></thead>
+          <thead><tr><th>Pull request</th><th class="opt">Contributor</th><th class="opt">Payout account</th><th class="num">Amount</th><th>Status</th><th class="opt">Awarded</th><th class="opt">Transactions</th><th class="opt"></th></tr></thead>
           <tbody id="rows"><tr><td colspan="8"><span class="sk" style="width:60%"></span></td></tr></tbody>
         </table></div>
       </section>
@@ -69,23 +69,25 @@ function render() {
   filter === 'All' ? url.searchParams.delete('status') : url.searchParams.set('status', filter);
   q ? url.searchParams.set('q', q) : url.searchParams.delete('q');
   history.replaceState(null, '', url);
-  const shown = model.awards.filter((a) => (filter === 'All' || a.status === filter)
-    && (!q || [String(a.pr), login(a), linkOf(a) ?? '', repoOf(a) ?? ''].some((v) => v.toLowerCase().includes(q))));
+  // a number means a pull request number; anything else matches names and accounts
+  const matches = (a) => !q || (/^\d+$/.test(q) ? String(a.pr) === q
+    : [login(a), linkOf(a) ?? '', repoOf(a) ?? '', names.labels[a.key] ?? ''].some((v) => v.toLowerCase().includes(q)));
+  const shown = model.awards.filter((a) => (filter === 'All' || a.status === filter) && matches(a));
   const proof = (a) => `proof.html?award=${a.key}`;
   $('rows').replaceChildren(...(shown.length ? shown.map((a) => {
     const repo = repoOf(a);
     const account = linkOf(a);
-    return h('tr', {},
+    return h('tr', { class: 'click', onclick: (e) => { if (!e.target.closest('a')) location.href = proof(a); } },
       h('td', {}, repo ? ext(`https://github.com/${repo}/pull/${a.pr}`, `${repo.split('/')[1]} #${a.pr}`) : `pool ${a.pool} · #${a.pr}`,
         names.labels[a.key] ? h('div', { class: 'faint mono' }, names.labels[a.key]) : ''),
-      h('td', {}, h('div', { class: 'who' }, avatar(a.githubId), ext(`https://github.com/${login(a)}`, login(a)))),
-      h('td', {}, account ? ext(cfg.accountUrl(account), short(account, 12, 8), 'link mono') : h('span', { class: 'faint' }, 'Not linked yet')),
+      h('td', { class: 'opt' }, h('div', { class: 'who' }, avatar(a.githubId), names.users[a.githubId] ? ext(`https://github.com/${login(a)}`, login(a)) : login(a))),
+      h('td', { class: 'opt' }, account ? ext(cfg.accountUrl(account), short(account, 12, 8), 'link mono') : h('span', { class: 'faint' }, 'Not linked yet')),
       h('td', { class: 'num' }, amount(a.amount, tok)),
       h('td', {}, status(a.status)),
-      h('td', { title: when(a.awardTs) }, ago(a.awardTs)),
-      h('td', { class: 'mono' }, ext(cfg.txUrl(a.awardTx), 'award', 'link'), a.payoutTx ? [' · ', ext(cfg.txUrl(a.payoutTx), 'payout', 'link')] : '',
+      h('td', { class: 'opt', title: when(a.awardTs) }, ago(a.awardTs)),
+      h('td', { class: 'mono opt' }, ext(cfg.txUrl(a.awardTx), a.payoutTx === a.awardTx ? 'award and payout' : 'award', 'link'), a.payoutTx && a.payoutTx !== a.awardTx ? [' · ', ext(cfg.txUrl(a.payoutTx), 'payout', 'link')] : '',
         a.refundTx ? [' · ', ext(cfg.txUrl(a.refundTx), 'refund', 'link')] : ''),
-      h('td', {}, h('a', { class: 'btn', href: proof(a) }, 'Proof →')),
+      h('td', { class: 'opt' }, h('a', { class: 'btn', href: proof(a) }, 'Proof →')),
     );
   }) : [h('tr', {}, h('td', { colspan: 8, class: 'empty' }, model.awards.length ? 'No payouts match.' : 'No awards yet. Merge a pull request with a pay label to create the first.'))]));
 }

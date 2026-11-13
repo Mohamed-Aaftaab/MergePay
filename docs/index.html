@@ -65,7 +65,8 @@
   .steps a { font-size: 13px; font-weight: 500; color: var(--lilac); text-underline-offset: 3px; }
   .ctas { display: flex; flex-wrap: wrap; gap: 12px; justify-content: center; }
   .band { max-width: 1100px; margin: 0 auto; padding: 72px 16px; border-top: 1px solid rgb(255 255 255 / 0.06); }
-  .band h2 { font: 300 clamp(28px, 3.4vw, 42px)/1.12 var(--display); font-variation-settings: "opsz" 32; letter-spacing: -0.03em; margin: 0 0 32px; max-width: 22ch; }
+  .band h2 { font: 300 clamp(28px, 3.4vw, 42px)/1.12 var(--display); font-variation-settings: "opsz" 32; letter-spacing: -0.03em; margin: 0 0 32px; max-width: 26ch; text-wrap: balance; }
+  .band-note { margin: -18px 0 26px; color: var(--muted); font-size: 14px; }
   .kicker { font: 600 11px/1 "JetBrains Mono", ui-monospace, monospace; letter-spacing: 0.14em; text-transform: uppercase; color: var(--lilac); margin: 0 0 14px; }
   .live-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 14px; }
   .live-card { border-radius: 18px; padding: 20px; }
@@ -79,7 +80,7 @@
   .role { border-radius: 20px; padding: 24px; display: flex; flex-direction: column; }
   .role h3 { font-size: 13px; font-weight: 600; color: var(--muted); margin: 0 0 6px; text-transform: none; }
   .role .lead { font: 400 21px/1.3 var(--display); letter-spacing: -0.01em; margin: 0 0 16px; color: var(--ink); }
-  .role ul, .trust ul, .start ol { margin: 0 0 20px; padding-left: 18px; display: grid; gap: 9px; color: var(--muted); font-size: 14px; flex: 1; }
+  .role ul, .trust ul, .start ol { margin: 0 0 20px; padding-left: 18px; display: grid; gap: 9px; align-content: start; color: var(--muted); font-size: 14px; flex: 1; }
   .trust-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
   .trust, .start { border-radius: 20px; padding: 24px; display: flex; flex-direction: column; align-items: flex-start; }
   .trust h3, .start h3 { margin: 0 0 16px; font-size: 17px; font-weight: 600; }
@@ -97,7 +98,7 @@
   @media (max-width: 900px) { .live-grid { grid-template-columns: 1fr 1fr; } .cards3, .trust-grid { grid-template-columns: 1fr; } .site-foot { grid-template-columns: 1fr 1fr; } .foot-brand { grid-column: 1 / -1; } }
   @media (max-width: 480px) { .live-grid { grid-template-columns: 1fr; } }
 
-  @media (max-width: 640px) { .lede span { display: inline; } }
+  @media (max-width: 640px) { .lede span { display: inline; } .display .line { display: inline; } .display { text-wrap: balance; } }
   /* the plate is cropped at the sides on narrower screens, which would cut the tags off */
   @media (max-aspect-ratio: 3 / 2) { .tag { display: none; } }
   @media (prefers-reduced-motion: reduce) { .rise { animation: none; } .plate video { display: none; } }
@@ -123,7 +124,7 @@
       <li><a data-repo-link="#run-your-own" href="#">Docs</a></li>
     </ul>
     <div class="nav-end">
-      <span class="chip-net"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c2.8 3 2.8 15 0 18M12 3c-2.8 3-2.8 15 0 18"/></svg>NEAR&nbsp;<span data-network></span></span>
+      <span class="chip-net"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c2.8 3 2.8 15 0 18M12 3c-2.8 3-2.8 15 0 18"/></svg><span>NEAR <span data-network></span></span></span>
       <a class="pill pill-white" href="console.html">Open console</a>
       <a class="pill pill-outline" data-repo-link="" href="#">View code</a>
     </div>
@@ -159,11 +160,12 @@
 <section class="band" id="live" aria-labelledby="live-title">
   <p class="kicker">Live from the contract</p>
   <h2 id="live-title">Running on NEAR <span data-network></span> today.</h2>
+  <p class="band-note" id="token-note">Read from the contract as this page loads.</p>
   <div class="live-grid">
     <div class="glass live-card"><div class="k">Pull requests paid</div><div class="v" id="l-paid">–</div><div class="s" id="l-paid-s">&nbsp;</div></div>
     <div class="glass live-card"><div class="k" id="l-speed-k">Merge to payout</div><div class="v" id="l-speed">–</div><div class="s" id="l-speed-s">&nbsp;</div></div>
     <div class="glass live-card"><div class="k">Signature check on-chain</div><div class="v" id="l-gas">–</div><div class="s">of NEAR's 300 TGas per-call limit</div></div>
-    <div class="glass live-card"><div class="k">Contributors linked</div><div class="v" id="l-people">–</div><div class="s" id="l-people-s">&nbsp;</div></div>
+    <div class="glass live-card"><div class="k">Contributors paid</div><div class="v" id="l-people">–</div><div class="s" id="l-people-s">&nbsp;</div></div>
   </div>
   <p class="band-links"><a href="console.html">Open the console →</a><a id="verify-link" href="proof.html">Re-check the latest payout's signature →</a></p>
 </section>
@@ -260,8 +262,9 @@
     document.getElementById('l-paid').textContent = model.totals.paidCount;
     document.getElementById('l-paid-s').textContent = `${model.totals.awards} awarded in ${model.pools.length} pool${model.pools.length === 1 ? '' : 's'}`;
     const linked = model.contributors.filter((c) => c.link).length;
-    document.getElementById('l-people').textContent = linked;
-    document.getElementById('l-people-s').textContent = `of ${model.contributors.length} paid so far`;
+    document.getElementById('l-people').textContent = model.contributors.length;
+    document.getElementById('l-people-s').textContent = `${linked === model.contributors.length ? 'each' : linked} linked to a NEAR account`;
+    if (tok.symbol !== 'USDC') document.getElementById('token-note').textContent = `Read from the contract as this page loads. This pilot pays in ${tok.symbol} as a stand-in for USDC.`;
     if (paid.length) {
       const first = new Date(Number(BigInt(paid[0].ts) / 1_000_000n));
       const day = first.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'UTC' });

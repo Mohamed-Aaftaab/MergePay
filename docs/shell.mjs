@@ -30,21 +30,22 @@ export function mount(page, title) {
   );
   const syncDot = h('span', { class: 'dot busy' });
   const syncText = h('span', {}, 'Connecting…');
+  const syncWhen = h('span', { class: 'when' });
   const app = document.querySelector('.app');
   $('topbar').replaceChildren(
     h('button', { class: 'btn menu-btn', type: 'button', 'aria-label': 'Menu', onclick: () => app.classList.toggle('open') }, icon('menu')),
-    h('div', { class: 'crumbs' }, 'Console / ', h('b', {}, title)),
+    h('div', { class: 'crumbs' }, h('span', { class: 'pre' }, 'Console / '), h('b', {}, title)),
     h('div', { class: 'spacer' }),
-    h('div', { class: 'sync', role: 'status', 'aria-live': 'polite' }, syncDot, syncText),
+    h('div', { class: 'sync', role: 'status', 'aria-live': 'polite' }, syncDot, syncText, syncWhen),
     h('button', { class: 'btn', type: 'button', onclick: () => location.reload() }, icon('refresh'), 'Refresh'),
   );
   document.addEventListener('click', (e) => { if (app.classList.contains('open') && !e.target.closest('.side, .menu-btn')) app.classList.remove('open'); });
 
-  const setStatus = (text, state = 'busy') => { syncText.textContent = text; syncDot.className = `dot ${state}`; };
+  const setStatus = (text, state = 'busy', when = '') => { syncText.textContent = text; syncWhen.textContent = when; syncDot.className = `dot ${state}`; };
   const chain = reader(cfg, (msg) => setStatus(msg));
   const data = chain.load().then((d) => {
     const time = new Date().toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
-    setStatus(`Synced ${time}`, 'ok');
+    setStatus('Synced', 'ok', ` ${time}`);
     const count = $('nav-payouts');
     if (count) count.append(h('span', { class: 'count' }, d.model.awards.length));
     return d;
