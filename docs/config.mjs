@@ -9,12 +9,13 @@ export const SITE = {
 
 const NETWORKS = {
   testnet: {
-    rpcs: ['https://rpc.testnet.fastnear.com', 'https://rpc.testnet.near.org'], // first that answers wins
+    // archival nodes: regular ones drop transactions after about 2.5 days, and the ledger reads every one since deploy
+    rpcs: ['https://archival-rpc.testnet.fastnear.com', 'https://archival-rpc.testnet.near.org'], // first that answers wins
     indexer: 'https://api-testnet.nearblocks.io/v3',
     explorer: 'https://testnet.near.rocks', // serves pages to scripts too, unlike explorers behind a bot check
   },
   mainnet: {
-    rpcs: ['https://rpc.mainnet.fastnear.com', 'https://rpc.mainnet.near.org'],
+    rpcs: ['https://archival-rpc.mainnet.fastnear.com', 'https://archival-rpc.mainnet.near.org'],
     indexer: 'https://api.nearblocks.io/v3',
     explorer: 'https://near.rocks',
   },
