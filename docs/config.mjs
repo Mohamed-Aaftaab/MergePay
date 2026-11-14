@@ -9,13 +9,15 @@ export const SITE = {
 
 const NETWORKS = {
   testnet: {
-    // archival nodes: regular ones drop transactions after about 2.5 days, and the ledger reads every one since deploy
-    rpcs: ['https://archival-rpc.testnet.fastnear.com', 'https://archival-rpc.testnet.near.org'], // first that answers wins
+    rpcs: ['https://rpc.testnet.fastnear.com', 'https://rpc.testnet.near.org'], // first that answers wins
+    // regular nodes forget transactions after about 2.5 days; archival ones keep them but rate limit hard
+    archival: ['https://archival-rpc.testnet.fastnear.com', 'https://archival-rpc.testnet.near.org'],
     indexer: 'https://api-testnet.nearblocks.io/v3',
     explorer: 'https://testnet.near.rocks', // serves pages to scripts too, unlike explorers behind a bot check
   },
   mainnet: {
-    rpcs: ['https://archival-rpc.mainnet.fastnear.com', 'https://archival-rpc.mainnet.near.org'],
+    rpcs: ['https://rpc.mainnet.fastnear.com', 'https://rpc.mainnet.near.org'],
+    archival: ['https://archival-rpc.mainnet.fastnear.com', 'https://archival-rpc.mainnet.near.org'],
     indexer: 'https://api.nearblocks.io/v3',
     explorer: 'https://near.rocks',
   },

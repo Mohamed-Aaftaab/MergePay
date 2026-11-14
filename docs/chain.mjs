@@ -25,11 +25,11 @@ export function reader(cfg, onStatus = () => {}) {
 
   // Public RPCs rate limit, so try each in turn, and if all refuse, pause and go round again (3 rounds).
   // A JSON-RPC error (bad request) is final and not retried.
-  async function rpc(method, params) {
+  async function rpc(method, params, urls = cfg.rpcs) {
     let lastError;
     for (let round = 0; round < 3; round++) {
       if (round) await sleep(1500 * round);
-      for (const url of cfg.rpcs) {
+      for (const url of urls) {
         try {
           const res = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ jsonrpc: '2.0', id: 1, method, params }) });
@@ -92,7 +92,12 @@ export function reader(cfg, onStatus = () => {}) {
         const key = `mergepay:${cfg.network}:tx4:${hash}`;
         let found = cache.get(key);
         if (!found) {
-          const tx = await rpc('tx', { tx_hash: hash, sender_account_id: cfg.contract, wait_until: 'FINAL' });
+          // NONE answers at once: the full outcome if the node has it, UNKNOWN_TRANSACTION if it has forgotten it
+          const args = { tx_hash: hash, sender_account_id: cfg.contract, wait_until: 'NONE' };
+          const tx = await rpc('tx', args).catch((err) => {
+            if (/UNKNOWN_TRANSACTION/.test(err.message)) return rpc('tx', args, cfg.archival);
+            throw err;
+          });
           // whole-transaction gas, the figure explorers and the CLI report as "gas used"
           const burnt = tx.receipts_outcome.reduce((sum, r) => sum + r.outcome.gas_burnt, tx.transaction_outcome.outcome.gas_burnt);
           const action = tx.transaction.receiver_id === cfg.contract ? tx.transaction.actions?.[0]?.FunctionCall : null;
