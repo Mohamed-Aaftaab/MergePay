@@ -100,8 +100,9 @@ $('keys').replaceChildren(...(keys.length ? keys.map((k) => h('tr', {},
 $('k-change').textContent = keyChange > nowS ? `Key change pending until ${new Date(keyChange * 1000).toUTCString()} · funders may refund early` : 'No key change pending';
 
 // workflows (GitHub's public API)
-const run = async (file) => (await chain.github(`/repos/${site.repo}/actions/workflows/${file}/runs?per_page=1&branch=main`))?.workflow_runs?.[0] ?? null;
-const [ci, award, keyRun, limit] = await Promise.all([run('ci.yml'), run('award.yml'), run('keys.yml'), fetch('https://api.github.com/rate_limit').then((r) => r.json()).catch(() => null)]);
+// award runs are triggered by a pull request, so GitHub files them under the PR's branch, not main
+const run = async (file, branch = 'main') => (await chain.github(`/repos/${site.repo}/actions/workflows/${file}/runs?per_page=1${branch ? `&branch=${branch}` : ''}`))?.workflow_runs?.[0] ?? null;
+const [ci, award, keyRun, limit] = await Promise.all([run('ci.yml'), run('award.yml', ''), run('keys.yml'), fetch('https://api.github.com/rate_limit').then((r) => r.json()).catch(() => null)]);
 // GitHub allows 60 anonymous requests an hour per visitor; past that, say so rather than claim nothing ran
 const limited = limit?.resources?.core?.remaining === 0;
 const result = (r) => !r ? h('span', { class: 'faint' }, limited ? 'GitHub limit reached, retry later' : 'No run yet') : r.status !== 'completed' ? h('span', { class: 'pill-s s-Pending' }, 'Running')
