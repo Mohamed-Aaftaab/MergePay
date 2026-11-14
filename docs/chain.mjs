@@ -23,20 +23,24 @@ export function reader(cfg, onStatus = () => {}) {
     throw new Error('The block explorer kept rate limiting. Try again in a minute.');
   }
 
-  // Public RPCs rate limit, so try each in turn; a JSON-RPC error (bad request) is final and not retried.
+  // Public RPCs rate limit, so try each in turn, and if all refuse, pause and go round again (3 rounds).
+  // A JSON-RPC error (bad request) is final and not retried.
   async function rpc(method, params) {
     let lastError;
-    for (const url of cfg.rpcs) {
-      try {
-        const res = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ jsonrpc: '2.0', id: 1, method, params }) });
-        if (!res.ok) { lastError = new Error(`${url} returned ${res.status}`); continue; }
-        const body = await res.json();
-        if (body.error) throw Object.assign(new Error(`RPC ${method}: ${body.error.cause?.name ?? body.error.message}`), { final: true });
-        return body.result;
-      } catch (err) {
-        if (err.final) throw err;
-        lastError = err;
+    for (let round = 0; round < 3; round++) {
+      if (round) await sleep(1500 * round);
+      for (const url of cfg.rpcs) {
+        try {
+          const res = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ jsonrpc: '2.0', id: 1, method, params }) });
+          if (!res.ok) { lastError = new Error(`${url} returned ${res.status}`); continue; }
+          const body = await res.json();
+          if (body.error) throw Object.assign(new Error(`RPC ${method}: ${body.error.cause?.name ?? body.error.message}`), { final: true });
+          return body.result;
+        } catch (err) {
+          if (err.final) throw err;
+          lastError = err;
+        }
       }
     }
     throw lastError;
